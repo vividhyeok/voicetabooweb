@@ -4,22 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>결과 - Voice Taboo</title>
+  <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%230a0d1f"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="36" fill="%2300ffff">🎤</text></svg>' />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <style>
-    body{margin:0;font-family:'VT323',monospace;background:linear-gradient(135deg,#07080e,#121528 60%,#0a0d1f);color:#eafaff;display:flex;align-items:center;justify-content:center;min-height:100vh}
-    .card{width:min(92vw,620px);background:rgba(0,0,0,0.8);border:2px solid #00ffff;border-radius:14px;box-shadow:0 0 24px rgba(0,255,255,.25);padding:22px;text-align:center}
-    h1{font-family:'Press Start 2P',cursive;color:#9afcff;font-size:1.2rem;margin:0 0 16px}
-    .big{font-size:1.6rem;color:#ffe56d;text-shadow:0 0 10px rgba(255,229,109,.6)}
-    .row{margin:10px 0;font-size:1.1rem}
-    .btns{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
-    a.btn{display:inline-block;padding:12px 18px;border-radius:10px;border:2px solid #34e9ff;background:linear-gradient(180deg,#0b0f1a,#0f1424);color:#fff;text-decoration:none;font-family:'Press Start 2P',cursive}
+    body{margin:0;font-family: 'Segoe UI','Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',Roboto,Helvetica,Arial,sans-serif;background:radial-gradient(1200px 800px at 10% 10%, rgba(0,255,255,0.08), transparent 60%),radial-gradient(1000px 700px at 90% 20%, rgba(255,0,255,0.06), transparent 60%),linear-gradient(135deg,#07080e,#121528 60%,#0a0d1f);color:#eafaff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{width:min(92vw,720px);background:rgba(0,0,0,0.82);border:2px solid #00ffff;border-radius:16px;box-shadow:0 0 0 3px rgba(0,255,255,0.08) inset,0 0 34px rgba(0,255,255,0.18);padding:24px 22px;text-align:center}
+    h1{font-family:'Press Start 2P',cursive;color:#9afcff;font-size:1.1rem;margin:0 0 12px;letter-spacing:1px;text-shadow:0 0 6px rgba(0,255,255,0.5)}
+    .summary{font-size:1.15rem;color:#cfe8ff;opacity:.95;margin-top:8px}
+    .metric-row{display:flex;gap:14px;justify-content:center;align-items:stretch;margin:14px 0;flex-wrap:wrap}
+    .chip{min-width:180px;padding:14px 16px;border-radius:12px;background:rgba(10,14,26,.7);border:1px solid #2a3b68;box-shadow:0 0 0 2px rgba(0,255,255,.05) inset}
+    .chip .label{font-size:.95rem;color:#9afcff;margin-bottom:6px}
+    .chip .value{font-size:1.6rem;font-weight:700;color:#ffe56d;text-shadow:0 0 8px rgba(255,229,109,.6)}
+    .btns{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+    a.btn{display:inline-block;padding:12px 18px;border-radius:10px;border:2px solid #34e9ff;background:linear-gradient(180deg,#0b0f1a,#0f1424);color:#fff;text-decoration:none;font-family:'Press Start 2P',cursive;letter-spacing:.5px}
+    .muted{color:#a6b7d1;opacity:.9}
   </style>
 </head>
 <body>
   <div class="card">
     <h1>플레이 결과</h1>
-    <div id="summary" class="row">로딩 중...</div>
-    <div id="detail" class="row"></div>
+    <div id="summary" class="summary">로딩 중...</div>
+    <div class="metric-row">
+      <div class="chip"><div class="label">RANK</div><div id="rankVal" class="value">—</div></div>
+      <div class="chip"><div class="label">TOP PERCENT</div><div id="percentVal" class="value">—</div></div>
+      <div class="chip"><div class="label">SCORE</div><div id="scoreVal" class="value">—</div></div>
+    </div>
+    <div id="detail" class="muted"></div>
     <div class="btns">
   <a class="btn" href="/">메인으로</a>
   <a class="btn" href="/">랭킹 보기</a>
@@ -44,14 +54,19 @@
       const total=stats.total;
       const modeLabel = mode==='SPEED_RUN' ? 'SPEED RUN' : 'TIME ATTACK';
       const scoreText = mode==='SPEED_RUN' ? `${score}초` : `${score}점`;
-      const s=document.getElementById('summary');
-      const d=document.getElementById('detail');
+  const s=document.getElementById('summary');
+  const d=document.getElementById('detail');
+  const rankEl=document.getElementById('rankVal');
+  const pctEl=document.getElementById('percentVal');
+  const scoreEl=document.getElementById('scoreVal');
       if(score==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
-      s.innerHTML = `<span class="big">${escapeHtml(name)}</span> (${dept? escapeHtml(deptLabel): '학과 미지정'})<br>`+
-                    `${escapeHtml(modeLabel)} 최종 점수: <strong>${escapeHtml(scoreText)}</strong>`;
+      s.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${dept? escapeHtml(deptLabel): '학과 미지정'} · ${escapeHtml(modeLabel)}`;
+      scoreEl.textContent = scoreText;
       if(total>0 && rankIndex!=null){
         const topText = formatPercent((rankIndex/total)*100);
-        d.innerHTML = `전체 ${total}회 기록 중 <strong>${rankIndex}위</strong> · <strong>상위 ${topText}</strong>`;
+        rankEl.textContent = `${rankIndex}/${total}`;
+        pctEl.textContent = `${topText}`;
+        d.innerHTML = `오늘 집계 기준입니다.`;
       }else{
         d.textContent = '상위 퍼센트 계산을 위한 데이터가 아직 충분하지 않습니다.';
       }

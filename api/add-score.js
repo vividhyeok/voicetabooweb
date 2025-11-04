@@ -32,8 +32,21 @@ export default async function handler(request, response) {
     return response.status(400).json({ error: 'Missing required fields' });
   }
 
-  const key = mode === 'TIME_ATTACK' ? 'scores:time_attack' : 'scores:speed_run';
-  const keyAll = mode === 'TIME_ATTACK' ? 'scores:time_attack:all' : 'scores:speed_run:all';
+  function scopeSuffix() {
+    const scope = process.env.LEADERBOARD_SCOPE || 'day';
+    if (scope === 'global') return '';
+    if (scope === 'tag' && process.env.LEADERBOARD_TAG) return `:${process.env.LEADERBOARD_TAG}`;
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `:${y}${m}${day}`;
+  }
+
+  const base = mode === 'TIME_ATTACK' ? 'scores:time_attack' : 'scores:speed_run';
+  const suffix = scopeSuffix();
+  const key = `${base}${suffix}`;
+  const keyAll = `${base}:all${suffix}`;
 
   try {
     // 학과 코드는 명시적으로만 받고, 'com'만 유효
