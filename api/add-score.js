@@ -73,13 +73,7 @@ export default async function handler(request, response) {
     await kv.zadd(key, { score: sortScore, member: JSON.stringify(newEntry) });
     await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
 
-    try {
-      await kv.zadd(base, { score: sortScore, member: JSON.stringify(newEntry) });
-      await kv.zadd(`${base}:all`, { score: sortScore, member: newEntry.id });
-    } catch (_) {}
-
     await kv.zremrangebyrank(key, 10, -1);
-    try { await kv.zremrangebyrank(base, 10, -1); } catch (_) {}
 
     const total = await kv.zcard(keyAll).catch(() => 0);
     let rankIndex = null;
