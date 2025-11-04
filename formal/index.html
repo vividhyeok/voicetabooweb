@@ -63,8 +63,12 @@
     .game-mode-buttons button { width: 100%; padding: 16px 14px; border-radius: 10px; border: 2px solid #34e9ff; background: linear-gradient(180deg, #0b0f1a, #0f1424); color: #ffffff; font-family: 'Press Start 2P', cursive; font-size: clamp(0.78rem, 2.8vw, 0.85rem); letter-spacing: 1px; cursor: pointer; transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease; box-shadow: 0 0 0 3px rgba(255,0,255,0.05) inset, 0 0 14px rgba(0,255,255,0.25); text-align: center; }
     .game-mode-buttons button:hover { transform: translateY(-2px); border-color: #ff4dff; box-shadow: 0 0 0 3px rgba(255,0,255,0.12) inset, 0 10px 28px rgba(255, 0, 255, 0.35), 0 0 22px rgba(0,255,255,0.25); background: linear-gradient(180deg, #10162a, #131a32); }
     .game-mode-buttons button small { display: block; font-family: 'VT323', monospace; font-size: 1rem; margin-top: 8px; opacity: 0.9; letter-spacing: 0.5px; color: #b8d6ff; }
-    #player-name-input { background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 10px 0 6px; width: 100%; max-width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset; }
-    #player-name-input:focus { outline: none; box-shadow: 0 0 18px rgba(0, 255, 255, 0.35); border-color: #ff4dff; }
+  #player-name-input { background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 10px 0 6px; width: 100%; max-width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset; }
+  #player-name-input:focus { outline: none; box-shadow: 0 0 18px rgba(0, 255, 255, 0.35); border-color: #ff4dff; }
+  /* Dropdown styled to match the input box */
+  .select-input { background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 40px 12px 15px; margin: 8px 0 6px; width: 100%; max-width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset; -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='18' height='18'%3E%3Cpath fill='%239afcff' d='M7 10l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; text-align: left; }
+  .select-input:focus { outline: none; border-color: #ff4dff; box-shadow: 0 0 18px rgba(0, 255, 255, 0.35); }
+  .select-input::-ms-expand { display: none; }
     #player-name-input::placeholder { color: #a6b7d1; opacity: 0.85; letter-spacing: 0.5px; }
     @media (max-width: 480px) { #game-container { padding: 12px 10px; } #game-area { width: 100%; padding: 14px; border-radius: 12px; } #hud { margin-bottom: 14px; } #target-display, #forbidden-display { padding: 12px; } #chat-area { max-height: 28vh; overflow-y: auto; } .score-entry { padding: 6px 8px; } #leaderboard { padding: 12px; } .game-mode-buttons { gap: 10px; } .game-mode-buttons button { padding: 14px; } #buttons button { min-width: 120px; } }
     @supports (padding: max(0px)) { body { padding-bottom: max(env(safe-area-inset-bottom), 0px); } }
@@ -77,7 +81,7 @@
       <h2>Web Edition</h2>
             
       <input type="text" id="player-name-input" placeholder="플레이어 이름을 입력하세요" maxlength="20">
-      <select id="dept-select" style="background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 8px 0 6px; width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset;">
+      <select id="dept-select" class="select-input">
         <option value="">학과를 선택하세요</option>
         <option value="ko">국어교육과</option>
         <option value="en">영어교육과</option>
