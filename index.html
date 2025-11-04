@@ -1118,9 +1118,9 @@
         /**
          * VTW_DIAG - Voice Taboo Web Diagnostic Function
          * Checks the status of all critical endpoints and displays results in console
-         * @param {boolean} write - If true, writes detailed diagnostic results to console
+         * @returns {Promise<Object>} Diagnostic results object
          */
-        window.VTW_DIAG = async function(write = false) {
+        window.VTW_DIAG = async function() {
             const results = {
                 ai: null,
                 lb: null,
@@ -1194,6 +1194,8 @@
             // Check for KV connection issues and display helpful message
             if (results.kv && !results.kv.ok) {
                 const envInfo = results.kv.env || {};
+                // Note: has_UPSTASH_URL maps to UPSTASH_REDIS_REST_URL env var
+                // Note: has_UPSTASH_TOKEN maps to UPSTASH_REDIS_REST_TOKEN env var
                 const hasUrl = envInfo.has_KV_REST_API_URL || envInfo.has_UPSTASH_URL || envInfo.has_KV_URL || envInfo.has_REDIS_URL;
                 const hasToken = envInfo.has_KV_REST_API_TOKEN || envInfo.has_UPSTASH_TOKEN;
                 
