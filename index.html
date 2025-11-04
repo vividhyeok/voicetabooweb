@@ -444,6 +444,10 @@
             <h2>Web Edition</h2>
             
             <input type="text" id="player-name-input" placeholder="플레이어 이름을 입력하세요" maxlength="20">
+            <select id="dept-select" style="background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 8px 0 6px; width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset;">
+                <option value="">학과를 선택하세요</option>
+                <option value="com">컴퓨터교육과</option>
+            </select>
             <div id="name-validation-message" style="color: red; font-size: 0.9rem; margin-top: 5px; min-height: 1.2rem;"></div>
             
             <div class="game-mode-buttons">
@@ -862,19 +866,27 @@
         const menuElement = document.getElementById('menu');
         const gameAreaElement = document.getElementById('game-area');
     const playerNameInput = document.getElementById('player-name-input');
-        const nameValidationMessage = document.getElementById('name-validation-message');
+    const nameValidationMessage = document.getElementById('name-validation-message');
+    const deptSelect = document.getElementById('dept-select');
         
         let game;
 
         function startGame(mode) {
             const playerName = playerNameInput.value.trim();
+            const deptCode = (deptSelect.value || '').trim();
             const validationMessage = validatePlayerName(playerName);
             if (validationMessage) {
                 alert(validationMessage);
                 playerNameInput.focus();
                 return;
             }
+            if (!deptCode) {
+                alert('학과를 선택해 주세요.');
+                deptSelect.focus();
+                return;
+            }
             localStorage.setItem('playerName', playerName);
+            localStorage.setItem('deptCode', deptCode);
 
             if (tabooBank.length === 0) {
                 alert('게임 데이터가 아직 로드되지 않았습니다. 잠시 기다려주세요.');
@@ -1009,15 +1021,9 @@
             gameLoop();
             const savedName = localStorage.getItem('playerName');
             if (savedName) playerNameInput.value = savedName;
-            // 학과/이름 설정 페이지 안내
-            const menu = document.getElementById('menu');
-            const info = document.createElement('div');
-            info.style.cssText = 'font-size:0.95rem;color:#b8d6ff;opacity:0.9;text-align:center;';
-            const deptCode = localStorage.getItem('deptCode') || '';
-            const deptLabel = deptCode ? (DEPT_LABELS[deptCode] || deptCode.toUpperCase()) : '미지정';
-            info.innerHTML = `학과: ${deptCode ? escapeHtml(deptLabel) : '미지정'} ${deptCode ? renderDeptBadge(deptCode) : ''}<br>` +
-                `<a href="/formal" style="color:#9afcff;text-decoration:underline;">학과/이름 설정하러 가기 →</a>`;
-            menu.appendChild(info);
+            // 학과 선택 초기값
+            const savedDept = localStorage.getItem('deptCode');
+            if (savedDept && deptSelect) deptSelect.value = savedDept;
             
             loadBannedKeywords();
 
@@ -1026,6 +1032,11 @@
                 nameValidationMessage.textContent = message;
                 playerNameInput.style.borderColor = message ? '#ff0000' : '#34e9ff';
             });
+            if (deptSelect) {
+                deptSelect.addEventListener('change', () => {
+                    try { localStorage.setItem('deptCode', deptSelect.value || ''); } catch (_) {}
+                });
+            }
         };
 
         // --- Nickname moderation helpers ---
