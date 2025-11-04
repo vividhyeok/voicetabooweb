@@ -1,0 +1,97 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+
+# Build outputs
+dist/
+out/
+.next/
+.vercel/
+
+# Environment files (do not commit secrets)
+.env*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+# 환경 변수 파일 (API 키 포함)
+.env
+.env.local
+.env.*.local
+*.env
+env.txt  # 로컬 개발용 환경변수 파일
+
+# OpenAI API 키 관련
+openai_key.txt
+api_key.txt
+keys/
+
+# 임시 파일들
+_tmp_*.wav
+*.tmp
+temp/
+tmp/
+
+# Python 관련
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE 설정 파일
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS 생성 파일
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 로그 파일
+*.log
+logs/
+
+# 개인 설정 파일
+config_local.py
+settings_local.py
+
+# 오디오 녹음 파일 (개인정보 보호)
+recordings/
+*.wav
+*.mp3
+*.m4a
+
+# 스코어 파일 백업
+scores_backup/
+*.bak
