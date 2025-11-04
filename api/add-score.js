@@ -41,22 +41,9 @@ export default async function handler(request, response) {
     }
     const kv = createClient({ url, token });
 
-    function scopeSuffix() {
-      const scope = process.env.LEADERBOARD_SCOPE || 'day';
-      if (scope === 'global') return '';
-      if (scope === 'tag' && process.env.LEADERBOARD_TAG) return `:${process.env.LEADERBOARD_TAG}`;
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `:${y}${m}${day}`;
-    }
-
-    const base = mode === 'TIME_ATTACK' ? 'scores:time_attack' : 'scores:speed_run';
-    const suffix = scopeSuffix();
-    const key = `${base}${suffix}`;
-    const keyAll = `${base}:all${suffix}`;
-
+      const base = mode === 'TIME_ATTACK' ? 'scores_debug:time_attack' : 'scores_debug:speed_run';
+      const key = base;
+      const keyAll = `${base}:all`;
     const safeDept = assertValidDept(deptCode);
     const newEntry = {
       id: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
@@ -70,7 +57,7 @@ export default async function handler(request, response) {
 
     const sortScore = mode === 'TIME_ATTACK' ? score * -1 : score;
 
-    await kv.zadd(key, { score: sortScore, member: JSON.stringify(newEntry) });
+    await kv.zadd(key, { score: sortScore, member: newEntry.id });
     await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
 
     await kv.zremrangebyrank(key, 10, -1);

@@ -28,35 +28,14 @@ export default async function handler(request, response) {
 
     const kv = createClient({ url, token });
 
-    function scopeSuffix() {
-      const scope = process.env.LEADERBOARD_SCOPE || 'day';
-      if (scope === 'global') return '';
-      if (scope === 'tag' && process.env.LEADERBOARD_TAG) return `:${process.env.LEADERBOARD_TAG}`;
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `:${y}${m}${day}`;
-    }
-    const suffix = scopeSuffix();
-
-    const keyTA = `scores:time_attack${suffix}`;
-    const keySR = `scores:speed_run${suffix}`;
+    const keyTA = 'scores_debug:time_attack';
+    const keySR = 'scores_debug:speed_run';
 
     let taRaw = await kv.zrange(keyTA, 0, 9).catch(() => []);
     let srRaw = await kv.zrange(keySR, 0, 9).catch(() => []);
 
-    const emptyTA = !Array.isArray(taRaw) || taRaw.length === 0;
-    const emptySR = !Array.isArray(srRaw) || srRaw.length === 0;
-    if (emptyTA) { try { taRaw = await kv.zrange('scores:time_attack', 0, 9); } catch (_) {} }
-    if (emptySR) { try { srRaw = await kv.zrange('scores:speed_run', 0, 9); } catch (_) {} }
-
-    const safeParse = (arr) => (Array.isArray(arr) ? arr : []).map((m) => {
-      try { return JSON.parse(m); } catch { return null; }
-    }).filter(Boolean);
-
-    const timeAttackScores = safeParse(taRaw);
-    const speedRunScores = safeParse(srRaw);
+    const timeAttackScores = taRaw || [];
+    const speedRunScores = srRaw || [];
 
     const body = { timeAttackScores, speedRunScores };
     if (debug) body._debug = { suffix, keyTA, keySR, provider: 'vercel-kv', taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
