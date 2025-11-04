@@ -821,8 +821,10 @@
         }
 
         // Web Speech API
-        let recognition;
-        let isRecording = false;
+    let recognition;
+    let isRecording = false;
+    let pendingTranscript = '';
+    let stoppedByUser = false;
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -835,16 +837,15 @@
             recognition.interimResults = true;
 
             recognition.onresult = async (event) => {
-                let finalTranscript = '';
+                let finalPart = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
+                        finalPart += event.results[i][0].transcript;
                     }
                 }
-                if (finalTranscript && game) {
-                    addMessage('user', 'YOU: ' + finalTranscript);
-                    await game.processAudio(finalTranscript);
-                    updateDisplay();
+                if (finalPart) {
+                    pendingTranscript += (pendingTranscript ? ' ' : '') + finalPart.trim();
+                    addMessage('user', 'YOU: ' + finalPart.trim());
                 }
             };
             recognition.onerror = (event) => {
@@ -853,10 +854,18 @@
                 isRecording = false;
                 updateRecordButton();
             };
-            recognition.onend = () => {
+            recognition.onend = async () => {
                 isRecording = false;
                 updateRecordButton();
-                updateStatus('녹음 중지됨');
+                if (stoppedByUser && pendingTranscript.trim()) {
+                    updateStatus('판단 중...');
+                    try { await game.processAudio(pendingTranscript.trim()); } catch (e) { console.error(e); }
+                    pendingTranscript = '';
+                    stoppedByUser = false;
+                    updateDisplay();
+                } else {
+                    updateStatus('녹음 중지됨');
+                }
             };
         }
 
@@ -904,11 +913,14 @@
         function toggleRecording() {
             if (!recognition) return;
             if (isRecording) {
+                stoppedByUser = true;
                 recognition.stop();
             } else {
                 try {
                     recognition.start();
                     isRecording = true;
+                    pendingTranscript = '';
+                    stoppedByUser = false;
                     updateRecordButton();
                     updateStatus('듣는 중...');
                 } catch (error) {
