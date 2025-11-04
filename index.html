@@ -322,6 +322,28 @@
             text-shadow: 0 0 5px #00ff00;
         }
 
+        /* Dept badge (image or text fallback) */
+        .dept-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .dept-badge img {
+            height: 18px;
+            width: auto;
+            border-radius: 4px;
+            border: 1px solid #2a3b68;
+            background: rgba(10, 14, 28, 0.5);
+            box-shadow: 0 0 0 2px rgba(0,255,255,0.05) inset;
+        }
+        .dept-badge .dept-text {
+            font-size: 0.95rem;
+            color: #b8d6ff;
+            opacity: 0.95;
+        }
+
         .game-mode-buttons {
             display: flex;
             flex-direction: column;
@@ -443,7 +465,6 @@
                             <div id="speed-run-scores"></div>
                         </div>
                     </div>
-                    <button onclick="resetLeaderboard()" style="margin-top: 10px;">Reset Leaderboard</button>
                 </div>
             </div>
         </div>
@@ -486,6 +507,20 @@
         const MAX_SCORES = 10;
         let openaiApiKey = '';
 
+        // Department labels (code -> human readable). Add more as needed.
+        const DEPT_LABELS = {
+            // 사범대 학과들
+            ko: '국어교육과',
+            en: '영어교육과',
+            soc: '사회교육과',
+            geo: '지리교육과',
+            eth: '윤리교육과',
+            math: '수학교육과',
+            sci: '과학교육학부',
+            ce: '컴퓨터교육과',
+            pe: '체육교육과'
+        };
+
         // On Vercel, set the `OPENAI_API_KEY` environment variable.
         if (window.Cypress) { // For testing purposes
             openaiApiKey = window.Cypress.env('OPENAI_API_KEY');
@@ -526,6 +561,32 @@
             } catch (_) {}
         });
 
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function parseNameAndDept(raw) {
+            const m = String(raw || '').trim().match(/^(.*)&([a-zA-Z0-9_-]{1,16})$/);
+            if (m) {
+                return { name: m[1].trim(), dept: m[2].toLowerCase() };
+            }
+            return { name: String(raw || '').trim(), dept: '' };
+        }
+
+        function renderDeptBadge(dept) {
+            if (!dept) return '';
+            const label = DEPT_LABELS[dept] || dept.toUpperCase();
+            return `<span class="dept-badge">
+                        <img src="images/${dept}.png" alt="${escapeHtml(label)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"/>
+                        <span class="dept-text" style="display:none;">${escapeHtml(label)}</span>
+                    </span>`;
+        }
+
         async function updateLeaderboard() {
             try {
                 const response = await fetch('/api/get-scores');
@@ -536,9 +597,11 @@
                     ? timeAttackScores.map((entry, index) => {
                         const rank = index + 1;
                         const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
+                        const dept = entry.deptCode || parseNameAndDept(entry.playerName).dept;
+                        const name = entry.playerName || parseNameAndDept(entry.playerName).name;
                         return `<div class="score-entry">
                             <span class="score-rank">${medal}</span>
-                            <span class="score-name">${entry.playerName}</span>
+                            <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
                             <span class="score-value">${entry.score}점</span>
                         </div>`;
                     }).join('')
@@ -549,9 +612,11 @@
                     ? speedRunScores.map((entry, index) => {
                         const rank = index + 1;
                         const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
+                        const dept = entry.deptCode || parseNameAndDept(entry.playerName).dept;
+                        const name = entry.playerName || parseNameAndDept(entry.playerName).name;
                         return `<div class="score-entry">
                             <span class="score-rank">${medal}</span>
-                            <span class="score-name">${entry.playerName}</span>
+                            <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
                             <span class="score-value">${entry.score}초</span>
                         </div>`;
                     }).join('')
