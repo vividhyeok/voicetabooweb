@@ -1,16 +1,30 @@
 import { createClient } from '@vercel/kv';
 
-const kv = createClient({
-  url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_URL || process.env.REDIS_URL,
-  token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_READ_ONLY_TOKEN,
-});
-
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
     return response.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  const debug = request.query && (request.query.debug === '1' || request.query.debug === 'true');
+
   try {
+    // Resolve KV config at request time so we can surface better diagnostics
+    const resolvedUrl = process.env.KV_REST_API_URL
+      || process.env.UPSTASH_REDIS_REST_URL
+      || process.env.KV_URL
+      || process.env.REDIS_URL;
+    const resolvedToken = process.env.KV_REST_API_TOKEN
+      || process.env.UPSTASH_REDIS_REST_TOKEN
+      || process.env.KV_REST_API_READ_ONLY_TOKEN;
+
+    if (!resolvedUrl || !resolvedToken) {
+      const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
+      if (debug) payload._diag = { reason: 'missing_url_or_token', hasUrl: !!resolvedUrl, hasToken: !!resolvedToken };
+      return response.status(200).json(payload);
+    }
+
+    const kv = createClient({ url: resolvedUrl, token: resolvedToken });
+
     function scopeSuffix() {
       const scope = process.env.LEADERBOARD_SCOPE || 'day';
       if (scope === 'global') return '';
@@ -22,34 +36,34 @@ export default async function handler(request, response) {
       return `:${y}${m}${day}`;
     }
     const suffix = scopeSuffix();
-    let timeAttackScoresRaw = await kv.zrange(`scores:time_attack${suffix}`, 0, 9, { withScores: true });
-    let speedRunScoresRaw = await kv.zrange(`scores:speed_run${suffix}`, 0, 9, { withScores: true });
+
+    // Read members only (no scores) in ascending order so "best" entries appear first.
+    // We store both modes so that smaller sortScore is better; hence ascending zrange(0..9) yields Top 10.
+    const keyTA = `scores:time_attack${suffix}`;
+    const keySR = `scores:speed_run${suffix}`;
+
+    let taRaw = await kv.zrange(keyTA, 0, 9).catch(() => []);
+    let srRaw = await kv.zrange(keySR, 0, 9).catch(() => []);
 
     // Fallback to legacy keys if scoped sets are empty (for smooth rollout)
-    const emptyTA = !Array.isArray(timeAttackScoresRaw) || timeAttackScoresRaw.length === 0;
-    const emptySR = !Array.isArray(speedRunScoresRaw) || speedRunScoresRaw.length === 0;
-    if (emptyTA) {
-      try { timeAttackScoresRaw = await kv.zrange('scores:time_attack', 0, 9, { withScores: true }); } catch (_) {}
-    }
-    if (emptySR) {
-      try { speedRunScoresRaw = await kv.zrange('scores:speed_run', 0, 9, { withScores: true }); } catch (_) {}
-    }
+    const emptyTA = !Array.isArray(taRaw) || taRaw.length === 0;
+    const emptySR = !Array.isArray(srRaw) || srRaw.length === 0;
+    if (emptyTA) { try { taRaw = await kv.zrange('scores:time_attack', 0, 9); } catch (_) {} }
+    if (emptySR) { try { srRaw = await kv.zrange('scores:speed_run', 0, 9); } catch (_) {} }
 
-    const parseScores = (rawScores) => {
-        const scores = [];
-        for (let i = 0; i < rawScores.length; i += 2) {
-            scores.push(JSON.parse(rawScores[i]));
-        }
-        return scores;
-    };
+    const safeParse = (arr) => (Array.isArray(arr) ? arr : []).map((m) => {
+      try { return JSON.parse(m); } catch { return null; }
+    }).filter(Boolean);
 
-    const timeAttackScores = Array.isArray(timeAttackScoresRaw) ? parseScores(timeAttackScoresRaw) : [];
-    const speedRunScores = Array.isArray(speedRunScoresRaw) ? parseScores(speedRunScoresRaw) : [];
+    const timeAttackScores = safeParse(taRaw);
+    const speedRunScores = safeParse(srRaw);
 
-    return response.status(200).json({ timeAttackScores, speedRunScores });
+    const body = { timeAttackScores, speedRunScores };
+    if (debug) body._debug = { suffix, keyTA, keySR, taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
+    return response.status(200).json(body);
   } catch (error) {
-    console.error('Error fetching scores:', error);
-    // Graceful fallback so UI doesn't break when KV env is missing
-    return response.status(200).json({ timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' });
+    const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
+    if (debug) payload._err = String(error?.message || error);
+    return response.status(200).json(payload);
   }
 }
