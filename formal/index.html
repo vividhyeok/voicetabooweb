@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사전 준비 - Voice Taboo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;font-family:'VT323',monospace;background:linear-gradient(135deg,#07080e,#121528 60%,#0a0d1f);color:#eafaff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{width:min(92vw,560px);background:rgba(0,0,0,0.8);border:2px solid #00ffff;border-radius:14px;box-shadow:0 0 24px rgba(0,255,255,.25);padding:22px}
+    h1{font-family:'Press Start 2P',cursive;color:#9afcff;text-align:center;font-size:1.2rem;margin:0 0 16px}
+    label{display:block;margin:10px 0 6px;color:#b8d6ff}
+    select,input{width:100%;padding:12px 14px;border-radius:8px;border:2px solid #34e9ff;background:rgba(24,34,60,.7);color:#fff;font-size:1.05rem}
+    button{width:100%;margin-top:18px;padding:14px;border-radius:10px;border:2px solid #34e9ff;background:linear-gradient(180deg,#0b0f1a,#0f1424);color:#fff;font-family:'Press Start 2P',cursive;cursor:pointer}
+    .note{margin-top:10px;font-size:.95rem;color:#b8d6ff;opacity:.9;text-align:center}
+    .error{color:#ff8a8a;font-size:.95rem;min-height:1.1rem}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>행사 준비</h1>
+    <label for="dept">학과 선택</label>
+    <select id="dept">
+      <option value="">학과 선택</option>
+      <option value="com">컴퓨터교육과</option>
+    </select>
+    <label for="name">닉네임</label>
+    <input id="name" type="text" placeholder="닉네임 입력 (2~20자)" maxlength="20" />
+    <div id="msg" class="error"></div>
+    <button id="saveBtn">저장하고 시작하기</button>
+    <div class="note">저장 후 메인 페이지로 이동합니다. 언제든 다시 변경 가능해요.</div>
+  </div>
+
+  <script>
+    function normalizeNameForCheck(name){
+      if(!name) return '';
+      let s=String(name).toLowerCase().normalize('NFKD').replace(/[\s_\-\.\u200b\u200c\u200d]/g,'');
+      const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','8':'b'};
+      s=s.replace(/[0134578]/g,ch=>map[ch]||ch);
+      return s.replace(/(.)\1{1,}/g,'$1');
+    }
+    function isInappropriateName(name){
+      const banned=[]; // 간단 버전(메인에 상세 로직 존재)
+      const norm=normalizeNameForCheck(name);
+      if(!norm) return true;
+      return banned.some(kw=>normalizeNameForCheck(kw)&&norm.includes(normalizeNameForCheck(kw)));
+    }
+    function validateName(name){
+      const raw=(name||'').trim();
+      if(raw.length<2) return '이름은 2자 이상이어야 합니다.';
+      if(raw.length>20) return '이름은 20자 이하여야 합니다.';
+      if(isInappropriateName(raw)) return '부적절한 이름입니다. 다른 이름을 입력해 주세요.';
+      return '';
+    }
+
+    const deptSel=document.getElementById('dept');
+    const nameInput=document.getElementById('name');
+    const msg=document.getElementById('msg');
+    const btn=document.getElementById('saveBtn');
+
+    // 초기화
+    (function init(){
+      const savedDept=localStorage.getItem('deptCode')||'';
+      const savedName=localStorage.getItem('playerName')||'';
+      if(savedDept) deptSel.value=savedDept;
+      if(savedName) nameInput.value=savedName;
+    })();
+
+    btn.addEventListener('click',()=>{
+      const dept=deptSel.value;
+      const name=nameInput.value.trim();
+      msg.textContent='';
+      if(!dept){ msg.textContent='학과를 선택해 주세요.'; return; }
+      if(dept!=='com'){ msg.textContent='현재는 컴퓨터교육과(com)만 지원합니다.'; return; }
+      const v=validateName(name);
+      if(v){ msg.textContent=v; return; }
+      try{
+        localStorage.setItem('deptCode',dept);
+        localStorage.setItem('playerName',name);
+      }catch(_){ }
+      window.location.href='/';
+    });
+  </script>
+</body>
+</html>
