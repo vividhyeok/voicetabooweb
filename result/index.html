@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>결과 - Voice Taboo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    body{margin:0;font-family:'VT323',monospace;background:linear-gradient(135deg,#07080e,#121528 60%,#0a0d1f);color:#eafaff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+    .card{width:min(92vw,620px);background:rgba(0,0,0,0.8);border:2px solid #00ffff;border-radius:14px;box-shadow:0 0 24px rgba(0,255,255,.25);padding:22px;text-align:center}
+    h1{font-family:'Press Start 2P',cursive;color:#9afcff;font-size:1.2rem;margin:0 0 16px}
+    .big{font-size:1.6rem;color:#ffe56d;text-shadow:0 0 10px rgba(255,229,109,.6)}
+    .row{margin:10px 0;font-size:1.1rem}
+    .btns{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+    a.btn{display:inline-block;padding:12px 18px;border-radius:10px;border:2px solid #34e9ff;background:linear-gradient(180deg,#0b0f1a,#0f1424);color:#fff;text-decoration:none;font-family:'Press Start 2P',cursive}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>플레이 결과</h1>
+    <div id="summary" class="row">로딩 중...</div>
+    <div id="detail" class="row"></div>
+    <div class="btns">
+      <a class="btn" href="/">메인으로</a>
+      <a class="btn" href="/#leaderboard">랭킹 보기</a>
+      <a class="btn" href="/formal">학과/이름 변경</a>
+    </div>
+  </div>
+  <script>
+    const DEPT_LABELS={ com:'컴퓨터교육과' };
+    function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+    function formatPercent(p){ if(!isFinite(p)) return '—'; const v=Math.max(0,Math.min(100,p)); return (v<0.1? v.toFixed(2): v<1? v.toFixed(1): Math.round(v))+'%'; }
+    (function init(){
+      let data={};
+      try{ data=JSON.parse(localStorage.getItem('lastResult')||'{}'); }catch(_){ data={}; }
+      const name=localStorage.getItem('playerName')||'Player';
+      const dept=localStorage.getItem('deptCode')||'';
+      const deptLabel=dept? (DEPT_LABELS[dept]||dept.toUpperCase()): '미지정';
+      const mode=data.mode||'TIME_ATTACK';
+      const score=data.score;
+      const stats=(data.stats)||{};
+      const top=stats.topPercent;
+      const rankIndex=stats.rankIndex;
+      const total=stats.total;
+      const modeLabel = mode==='SPEED_RUN' ? 'SPEED RUN' : 'TIME ATTACK';
+      const scoreText = mode==='SPEED_RUN' ? `${score}초` : `${score}점`;
+      const s=document.getElementById('summary');
+      const d=document.getElementById('detail');
+      if(score==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
+      s.innerHTML = `<span class="big">${escapeHtml(name)}</span> (${dept? escapeHtml(deptLabel): '학과 미지정'})<br>`+
+                    `${escapeHtml(modeLabel)} 최종 점수: <strong>${escapeHtml(scoreText)}</strong>`;
+      if(total>0 && rankIndex!=null){
+        const topText = formatPercent((rankIndex/total)*100);
+        d.innerHTML = `전체 ${total}회 기록 중 <strong>${rankIndex}위</strong> · <strong>상위 ${topText}</strong>`;
+      }else{
+        d.textContent = '상위 퍼센트 계산을 위한 데이터가 아직 충분하지 않습니다.';
+      }
+    })();
+  </script>
+</body>
+</html>

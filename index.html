@@ -511,29 +511,29 @@
 
         // Department labels (code -> human readable). Add more as needed.
         const DEPT_LABELS = {
-            // 사범대 학과들
-            ko: '국어교육과',
-            en: '영어교육과',
-            soc: '사회교육과',
-            geo: '지리교육과',
-            eth: '윤리교육과',
-            math: '수학교육과',
-            sci: '과학교육학부',
-            ce: '컴퓨터교육과',
-            pe: '체육교육과'
+            // 현재 행사용: 컴퓨터교육과만 사용
+            com: '컴퓨터교육과'
         };
 
         // OpenAI 호출은 /api/ai-guess를 통해 이루어집니다.
 
         async function saveScore(mode, score) {
             const playerName = localStorage.getItem('playerName') || 'Player';
+            const deptCode = localStorage.getItem('deptCode') || '';
             try {
-                await fetch('/api/add-score', {
+                const res = await fetch('/api/add-score', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode, score, playerName })
+                    body: JSON.stringify({ mode, score, playerName, deptCode })
                 });
-                updateLeaderboard();
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data && data.success) {
+                    try { localStorage.setItem('lastResult', JSON.stringify({ mode, score, ...(data || {}) })); } catch (_) {}
+                    // 결과 페이지로 이동
+                    window.location.href = '/result';
+                } else {
+                    updateLeaderboard();
+                }
             } catch (error) {
                 console.error('Failed to save score:', error);
             }
@@ -567,19 +567,17 @@
                 .replace(/'/g, '&#39;');
         }
 
-        function parseNameAndDept(raw) {
-            const m = String(raw || '').trim().match(/^(.*)&([a-zA-Z0-9_-]{1,16})$/);
-            if (m) {
-                return { name: m[1].trim(), dept: m[2].toLowerCase() };
-            }
-            return { name: String(raw || '').trim(), dept: '' };
+        function resolveDeptImageCode(dept) {
+            if (!dept) return '';
+            return dept;
         }
 
         function renderDeptBadge(dept) {
             if (!dept) return '';
-            const label = DEPT_LABELS[dept] || dept.toUpperCase();
+            const label = DEPT_LABELS[dept] || DEPT_LABELS[resolveDeptImageCode(dept)] || dept.toUpperCase();
+            const imgCode = resolveDeptImageCode(dept);
             return `<span class="dept-badge">
-                        <img src="images/${dept}.png" alt="${escapeHtml(label)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"/>
+                        <img src="images/${imgCode}.png" alt="${escapeHtml(label)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"/>
                         <span class="dept-text" style="display:none;">${escapeHtml(label)}</span>
                     </span>`;
         }
@@ -596,8 +594,8 @@
                     ? timeAttackScores.map((entry, index) => {
                         const rank = index + 1;
                         const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
-                        const dept = entry.deptCode || parseNameAndDept(entry.playerName).dept;
-                        const name = entry.playerName || parseNameAndDept(entry.playerName).name;
+                        const dept = entry.deptCode || '';
+                        const name = entry.playerName || '';
                         return `<div class="score-entry">
                             <span class="score-rank">${medal}</span>
                             <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
@@ -611,8 +609,8 @@
                     ? speedRunScores.map((entry, index) => {
                         const rank = index + 1;
                         const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
-                        const dept = entry.deptCode || parseNameAndDept(entry.playerName).dept;
-                        const name = entry.playerName || parseNameAndDept(entry.playerName).name;
+                        const dept = entry.deptCode || '';
+                        const name = entry.playerName || '';
                         return `<div class="score-entry">
                             <span class="score-rank">${medal}</span>
                             <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
@@ -863,7 +861,7 @@
         const statusElement = document.getElementById('status');
         const menuElement = document.getElementById('menu');
         const gameAreaElement = document.getElementById('game-area');
-        const playerNameInput = document.getElementById('player-name-input');
+    const playerNameInput = document.getElementById('player-name-input');
         const nameValidationMessage = document.getElementById('name-validation-message');
         
         let game;
@@ -1011,6 +1009,15 @@
             gameLoop();
             const savedName = localStorage.getItem('playerName');
             if (savedName) playerNameInput.value = savedName;
+            // 학과/이름 설정 페이지 안내
+            const menu = document.getElementById('menu');
+            const info = document.createElement('div');
+            info.style.cssText = 'font-size:0.95rem;color:#b8d6ff;opacity:0.9;text-align:center;';
+            const deptCode = localStorage.getItem('deptCode') || '';
+            const deptLabel = deptCode ? (DEPT_LABELS[deptCode] || deptCode.toUpperCase()) : '미지정';
+            info.innerHTML = `학과: ${deptCode ? escapeHtml(deptLabel) : '미지정'} ${deptCode ? renderDeptBadge(deptCode) : ''}<br>` +
+                `<a href="/formal" style="color:#9afcff;text-decoration:underline;">학과/이름 설정하러 가기 →</a>`;
+            menu.appendChild(info);
             
             loadBannedKeywords();
 

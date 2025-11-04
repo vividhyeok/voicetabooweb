@@ -1,27 +1,18 @@
 import { kv } from '@vercel/kv';
 
-// College of Education department codes
+// 사범대 학과 라벨(현재 행사: 컴퓨터교육과만 사용)
 const DEPTS = {
-  ko: '국어교육과',
-  en: '영어교육과',
-  soc: '사회교육과',
-  geo: '지리교육과',
-  eth: '윤리교육과',
-  math: '수학교육과',
-  sci: '과학교육학부',
-  ce: '컴퓨터교육과',
-  pe: '체육교육과',
+  com: '컴퓨터교육과',
 };
 
-function parseNameAndDept(rawName) {
-  const raw = String(rawName || '').trim();
-  const m = raw.match(/^(.*)&([a-zA-Z0-9_-]{1,16})$/);
-  if (!m) return { name: raw, deptCode: '' };
-  const name = m[1].trim();
-  const code = m[2].toLowerCase();
-  if (DEPTS[code]) return { name, deptCode: code };
-  // Unrecognized code: ignore and keep original name as-is
-  return { name: raw, deptCode: '' };
+function assertValidDept(code) {
+  if (!code) return '';
+  const c = String(code).toLowerCase();
+  if (c === 'ce') {
+    // 더 이상 'ce' 별칭은 허용하지 않음
+    throw new Error('invalid_dept');
+  }
+  return DEPTS[c] ? c : '';
 }
 
 export default async function handler(request, response) {
@@ -29,36 +20,59 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { mode, score, playerName } = request.body;
+  const { mode, score, playerName, deptCode } = request.body || {};
 
   if (!mode || score === undefined || !playerName) {
     return response.status(400).json({ error: 'Missing required fields' });
   }
 
   const key = mode === 'TIME_ATTACK' ? 'scores:time_attack' : 'scores:speed_run';
+  const keyAll = mode === 'TIME_ATTACK' ? 'scores:time_attack:all' : 'scores:speed_run:all';
 
   try {
-    const { name, deptCode } = parseNameAndDept(playerName);
+    // 학과 코드는 명시적으로만 받고, 'com'만 유효
+    const safeDept = assertValidDept(deptCode);
     const newEntry = {
-      playerName: name,
-      deptCode, // empty string when no affiliation
-      deptLabel: deptCode ? DEPTS[deptCode] : '',
+      id: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
+      playerName: String(playerName).trim(),
+      deptCode: safeDept, // 공란이면 미지정
+      deptLabel: safeDept ? DEPTS[safeDept] : '',
       score,
+      mode,
       date: new Date().toISOString(),
     };
 
     // For TIME_ATTACK, higher scores are better. For SPEED_RUN, lower scores are better.
-    const scoreValue = mode === 'TIME_ATTACK' ? score * -1 : score; // Store negative for descending order
+    const sortScore = mode === 'TIME_ATTACK' ? score * -1 : score; // 낮을수록 상위
 
     // Add the new score to the sorted set
-  await kv.zadd(key, { score: scoreValue, member: JSON.stringify(newEntry) });
+    await kv.zadd(key, { score: sortScore, member: JSON.stringify(newEntry) });
+    // 전체 플레이 기록 세트 (백분위 계산용) - 멤버를 유니크하게 유지
+    await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
 
-    // Keep only the top 10
+    // Keep only the top 10 on leaderboard
     await kv.zremrangebyrank(key, 10, -1);
 
-    return response.status(200).json({ success: true });
+    // 백분위 계산
+    const total = await kv.zcard(keyAll).catch(() => 0);
+    let rankIndex = null;
+    try {
+      // Upstash/Redis: zcount(min, max)로 현재 점수보다 "작은"(=더 우수한) 개수 계산
+      // sortScore가 낮을수록 상위이므로, (-inf, sortScore) 구간 개수가 더 잘한 사람 수
+      // 일부 래퍼는 exclusive를 지원하지 않을 수 있어, 동일 점수를 포함하도록 <=로 근사
+      const betterOrEqual = await kv.zcount(keyAll, Number.NEGATIVE_INFINITY, sortScore);
+      // 동일 점수 동률에서의 위치는 보수적으로 betterOrEqual 사용
+      rankIndex = Math.max(1, betterOrEqual); // 1-based
+    } catch (e) {
+      // zcount 미지원 시 안전한 기본값
+      rankIndex = 1;
+    }
+    const topPercent = total > 0 ? (rankIndex / total) * 100 : 100;
+
+    return response.status(200).json({ success: true, entry: newEntry, stats: { total, rankIndex, topPercent } });
   } catch (error) {
     console.error('Error adding score:', error);
-    return response.status(500).json({ error: 'Internal Server Error' });
+    const code = String(error && error.message) === 'invalid_dept' ? 400 : 500;
+    return response.status(code).json({ error: code === 400 ? 'Invalid department' : 'Internal Server Error' });
   }
 }
