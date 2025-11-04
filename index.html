@@ -563,18 +563,7 @@
                 if (saved === '0') {
                     box.classList.remove('collapsed');
                 }
-                // 해시로 접근 시 자동으로 랭킹 펼치기
-                if (location.hash && location.hash.includes('leaderboard')) {
-                    box.classList.remove('collapsed');
-                    setTimeout(()=>{ box.scrollIntoView({behavior:'smooth', block:'start'}); }, 0);
-                }
-                // 결과 페이지에서 설정한 플래그로 1회 자동 펼치기/스크롤
-                const openOnce = localStorage.getItem('openLeaderboardOnce') === '1';
-                if (openOnce) {
-                    box.classList.remove('collapsed');
-                    setTimeout(()=>{ box.scrollIntoView({behavior:'smooth', block:'start'}); }, 0);
-                    try { localStorage.removeItem('openLeaderboardOnce'); } catch (_) {}
-                }
+                // 기본은 접힘 유지. 별도의 자동 펼침/스크롤 동작을 하지 않습니다.
             } catch (_) {}
         });
 
