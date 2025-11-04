@@ -18,13 +18,27 @@ export default async function handler(request, response) {
 
   try {
     // Resolve KV config at request time so we can surface better diagnostics
-    const resolvedUrl = process.env.KV_REST_API_URL
-      || process.env.UPSTASH_REDIS_REST_URL
-      || process.env.KV_URL
-      || process.env.REDIS_URL;
-    const resolvedToken = process.env.KV_REST_API_TOKEN
-      || process.env.UPSTASH_REDIS_REST_TOKEN
-      || process.env.KV_REST_API_READ_ONLY_TOKEN;
+    // Prefer matched provider pairs to avoid URL/token mismatch across providers
+    const pickKvConfig = () => {
+      const vercelUrl = process.env.KV_REST_API_URL;
+      const vercelTokenRW = process.env.KV_REST_API_TOKEN;
+      const vercelTokenRO = process.env.KV_REST_API_READ_ONLY_TOKEN;
+      const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      if (vercelUrl && (vercelTokenRW || vercelTokenRO)) {
+        return { url: vercelUrl, token: vercelTokenRW || vercelTokenRO, provider: 'vercel-kv' };
+      }
+      if (upstashUrl && upstashToken) {
+        return { url: upstashUrl, token: upstashToken, provider: 'upstash' };
+      }
+      // Last-resort permissive fallback
+      const url = vercelUrl || upstashUrl || process.env.KV_URL || process.env.REDIS_URL;
+      const token = vercelTokenRW || upstashToken || vercelTokenRO;
+      return { url, token, provider: 'auto' };
+    };
+
+    const { url: resolvedUrl, token: resolvedToken, provider } = pickKvConfig();
 
     if (!resolvedUrl || !resolvedToken) {
       const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
@@ -32,7 +46,7 @@ export default async function handler(request, response) {
       return response.status(200).json(payload);
     }
 
-    const kv = createClient({ url: resolvedUrl, token: resolvedToken });
+  const kv = createClient({ url: resolvedUrl, token: resolvedToken });
 
     function scopeSuffix() {
       const scope = process.env.LEADERBOARD_SCOPE || 'day';
@@ -67,8 +81,8 @@ export default async function handler(request, response) {
     const timeAttackScores = safeParse(taRaw);
     const speedRunScores = safeParse(srRaw);
 
-    const body = { timeAttackScores, speedRunScores };
-    if (debug) body._debug = { suffix, keyTA, keySR, taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
+  const body = { timeAttackScores, speedRunScores };
+  if (debug) body._debug = { suffix, keyTA, keySR, provider, taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
     return response.status(200).json(body);
   } catch (error) {
     const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
