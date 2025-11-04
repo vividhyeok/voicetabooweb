@@ -5,7 +5,16 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const debug = request.query && (request.query.debug === '1' || request.query.debug === 'true');
+  // Robust debug detection: support both request.query and URLSearchParams
+  let debug = false;
+  try {
+    if (request.query && (request.query.debug === '1' || request.query.debug === 'true')) debug = true;
+    else if (request.url) {
+      const u = new URL(request.url, `http://${request.headers?.host || 'localhost'}`);
+      const q = u.searchParams.get('debug');
+      if (q === '1' || q === 'true') debug = true;
+    }
+  } catch (_) {}
 
   try {
     // Resolve KV config at request time so we can surface better diagnostics
@@ -19,7 +28,7 @@ export default async function handler(request, response) {
 
     if (!resolvedUrl || !resolvedToken) {
       const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
-      if (debug) payload._diag = { reason: 'missing_url_or_token', hasUrl: !!resolvedUrl, hasToken: !!resolvedToken };
+      payload._diag = { reason: 'missing_url_or_token', hasUrl: !!resolvedUrl, hasToken: !!resolvedToken };
       return response.status(200).json(payload);
     }
 
@@ -63,7 +72,12 @@ export default async function handler(request, response) {
     return response.status(200).json(body);
   } catch (error) {
     const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
-    if (debug) payload._err = String(error?.message || error);
+    payload._err = String(error?.message || error);
+    try {
+      const hasUrl = !!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_URL || process.env.REDIS_URL);
+      const hasToken = !!(process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_READ_ONLY_TOKEN);
+      payload._diag = { reason: 'exception', hasUrl, hasToken };
+    } catch (_) {}
     return response.status(200).json(payload);
   }
 }
