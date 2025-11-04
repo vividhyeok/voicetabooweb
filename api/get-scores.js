@@ -17,36 +17,16 @@ export default async function handler(request, response) {
   } catch (_) {}
 
   try {
-    // Resolve KV config at request time so we can surface better diagnostics
-    // Prefer matched provider pairs to avoid URL/token mismatch across providers
-    const pickKvConfig = () => {
-      const vercelUrl = process.env.KV_REST_API_URL;
-      const vercelTokenRW = process.env.KV_REST_API_TOKEN;
-      const vercelTokenRO = process.env.KV_REST_API_READ_ONLY_TOKEN;
-      const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-      const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url = process.env.KV_REST_API_URL;
+    const token = process.env.KV_REST_API_TOKEN;
 
-      if (vercelUrl && (vercelTokenRW || vercelTokenRO)) {
-        return { url: vercelUrl, token: vercelTokenRW || vercelTokenRO, provider: 'vercel-kv' };
-      }
-      if (upstashUrl && upstashToken) {
-        return { url: upstashUrl, token: upstashToken, provider: 'upstash' };
-      }
-      // Last-resort permissive fallback
-      const url = vercelUrl || upstashUrl || process.env.KV_URL || process.env.REDIS_URL;
-      const token = vercelTokenRW || upstashToken || vercelTokenRO;
-      return { url, token, provider: 'auto' };
-    };
-
-    const { url: resolvedUrl, token: resolvedToken, provider } = pickKvConfig();
-
-    if (!resolvedUrl || !resolvedToken) {
+    if (!url || !token) {
       const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
-      payload._diag = { reason: 'missing_url_or_token', hasUrl: !!resolvedUrl, hasToken: !!resolvedToken };
+      payload._diag = { reason: 'missing_vercel_kv_credentials', hasUrl: !!url, hasToken: !!token };
       return response.status(200).json(payload);
     }
 
-  const kv = createClient({ url: resolvedUrl, token: resolvedToken });
+    const kv = createClient({ url, token });
 
     function scopeSuffix() {
       const scope = process.env.LEADERBOARD_SCOPE || 'day';
@@ -60,15 +40,12 @@ export default async function handler(request, response) {
     }
     const suffix = scopeSuffix();
 
-    // Read members only (no scores) in ascending order so "best" entries appear first.
-    // We store both modes so that smaller sortScore is better; hence ascending zrange(0..9) yields Top 10.
     const keyTA = `scores:time_attack${suffix}`;
     const keySR = `scores:speed_run${suffix}`;
 
     let taRaw = await kv.zrange(keyTA, 0, 9).catch(() => []);
     let srRaw = await kv.zrange(keySR, 0, 9).catch(() => []);
 
-    // Fallback to legacy keys if scoped sets are empty (for smooth rollout)
     const emptyTA = !Array.isArray(taRaw) || taRaw.length === 0;
     const emptySR = !Array.isArray(srRaw) || srRaw.length === 0;
     if (emptyTA) { try { taRaw = await kv.zrange('scores:time_attack', 0, 9); } catch (_) {} }
@@ -81,17 +58,18 @@ export default async function handler(request, response) {
     const timeAttackScores = safeParse(taRaw);
     const speedRunScores = safeParse(srRaw);
 
-  const body = { timeAttackScores, speedRunScores };
-  if (debug) body._debug = { suffix, keyTA, keySR, provider, taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
+    const body = { timeAttackScores, speedRunScores };
+    if (debug) body._debug = { suffix, keyTA, keySR, provider: 'vercel-kv', taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
     return response.status(200).json(body);
   } catch (error) {
     const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
     payload._err = String(error?.message || error);
     try {
-      const hasUrl = !!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_URL || process.env.REDIS_URL);
-      const hasToken = !!(process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_READ_ONLY_TOKEN);
+      const hasUrl = !!process.env.KV_REST_API_URL;
+      const hasToken = !!process.env.KV_REST_API_TOKEN;
       payload._diag = { reason: 'exception', hasUrl, hasToken };
     } catch (_) {}
     return response.status(200).json(payload);
   }
 }
+
