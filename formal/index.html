@@ -1,85 +1,273 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>사전 준비 - Voice Taboo</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Voice Taboo - Web Edition</title>
+  <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="%230a0d1f"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="36" fill="%2300ffff">🎤</text></svg>' />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <style>
-    body{margin:0;font-family:'VT323',monospace;background:linear-gradient(135deg,#07080e,#121528 60%,#0a0d1f);color:#eafaff;display:flex;align-items:center;justify-content:center;min-height:100vh}
-    .card{width:min(92vw,560px);background:rgba(0,0,0,0.8);border:2px solid #00ffff;border-radius:14px;box-shadow:0 0 24px rgba(0,255,255,.25);padding:22px}
-    h1{font-family:'Press Start 2P',cursive;color:#9afcff;text-align:center;font-size:1.2rem;margin:0 0 16px}
-    label{display:block;margin:10px 0 6px;color:#b8d6ff}
-    select,input{width:100%;padding:12px 14px;border-radius:8px;border:2px solid #34e9ff;background:rgba(24,34,60,.7);color:#fff;font-size:1.05rem}
-    button{width:100%;margin-top:18px;padding:14px;border-radius:10px;border:2px solid #34e9ff;background:linear-gradient(180deg,#0b0f1a,#0f1424);color:#fff;font-family:'Press Start 2P',cursive;cursor:pointer}
-    .note{margin-top:10px;font-size:.95rem;color:#b8d6ff;opacity:.9;text-align:center}
-    .error{color:#ff8a8a;font-size:.95rem;min-height:1.1rem}
+    html, body { width: 100%; overflow-x: hidden; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; font-family: 'VT323', monospace;
+      background: radial-gradient(1200px 800px at 10% 10%, rgba(0,255,255,0.08), transparent 60%),
+            radial-gradient(1000px 700px at 90% 20%, rgba(255,0,255,0.06), transparent 60%),
+            linear-gradient(135deg, #07080e, #121528 60%, #0a0d1f);
+      color: #eafaff; overflow-y: auto; min-height: 100vh; line-height: 1.55;
+    }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 3px); mix-blend-mode: overlay; opacity: 0.25; }
+    #game-container { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px 10px; box-sizing: border-box; }
+    #title { font-family: 'Press Start 2P', cursive; font-size: clamp(1.4rem, 4.5vw, 2rem); color: #9afcff; text-shadow: 0 0 6px #00ffff, 0 0 18px rgba(0,255,255,0.6), 0 0 28px rgba(255,0,255,0.4); letter-spacing: 2px; margin: 10px 0 6px; text-align: center; }
+    #game-container h2 { font-family: 'VT323', monospace; margin: 0 0 16px; color: #b8d6ff; font-size: clamp(1rem, 3.6vw, 1.2rem); letter-spacing: 1px; text-align: center; opacity: 0.9; }
+    #game-area { width: min(92vw, 800px); background: rgba(0, 0, 0, 0.8); border: 2px solid #00ffff; border-radius: 15px; padding: 20px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.3); display: flex; flex-direction: column; align-items: center; }
+    #hud { display: flex; justify-content: space-between; width: 100%; margin-bottom: 20px; font-size: clamp(1rem, 3.8vw, 1.2rem); }
+    #target-display { background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff; border-radius: 10px; padding: 15px; margin: 10px 0; text-align: center; width: 100%; }
+    #target-word { font-size: clamp(1.4rem, 6.5vw, 2.2rem); color: #ffffff; text-shadow: 0 0 10px #ffffff; }
+    #forbidden-display { background: rgba(255, 0, 0, 0.1); border: 2px solid #ff0000; border-radius: 10px; padding: 15px; margin: 10px 0; text-align: center; width: 100%; }
+    #forbidden-words { font-size: clamp(0.95rem, 3.8vw, 1.2rem); color: #ffaaaa; }
+    #controls { display: flex; flex-direction: column; align-items: center; margin: 20px 0; }
+    #record-btn { background: linear-gradient(45deg, #ff0000, #ff4444); border: none; border-radius: 50px; width: clamp(72px, 18vw, 100px); height: clamp(72px, 18vw, 100px); font-size: clamp(1.1rem, 4.8vw, 1.5rem); color: white; cursor: pointer; transition: all 0.3s; box-shadow: 0 0 20px rgba(255, 0, 0, 0.5); }
+    #record-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+    #record-btn.recording { background: linear-gradient(45deg, #00ff00, #44ff44); animation: pulse 1s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    #status { margin: 10px 0; font-size: 1.1rem; text-align: center; min-height: 30px; }
+    #chat-area { width: 100%; margin: 20px 0; }
+    .message { background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 10px; margin: 5px 0; border-left: 4px solid #00ffff; }
+    .user-message { border-left-color: #00ff00; }
+    .ai-message { border-left-color: #ffff00; }
+    #buttons { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+    button { background: rgba(0, 255, 255, 0.2); border: 1px solid #00ffff; border-radius: 5px; color: #00ffff; padding: 12px 18px; cursor: pointer; transition: all 0.3s; -webkit-tap-highlight-color: transparent; }
+    button:hover { background: rgba(0, 255, 255, 0.4); }
+    button small { font-size: 11px; color: #cccccc; display: block; margin-top: 3px; }
+    #menu { display: none; flex-direction: column; align-items: center; width: 100%; max-width: 92vw; gap: 18px; padding: 22px 18px; background: rgba(10, 14, 26, 0.82); border: 2px solid #34e9ff; border-radius: 16px; box-shadow: 0 0 0 3px rgba(0,255,255,0.08) inset, 0 0 34px rgba(0,255,255,0.18); }
+    #menu.show { display: flex; }
+    #leaderboard { background: rgba(5, 8, 18, 0.8); border: 2px solid #34e9ff; border-radius: 14px; padding: 16px; width: 100%; box-shadow: 0 0 18px rgba(0, 255, 255, 0.22); }
+    #leaderboard h3 { font-family: 'Press Start 2P', cursive; color: #ffe56d; margin-bottom: 12px; text-align: center; font-size: 1rem; letter-spacing: 1px; text-shadow: 0 0 8px rgba(255, 229, 109, 0.6); cursor: pointer; user-select: none; position: relative; }
+    #leaderboard h3::after { content: '▼'; display: inline-block; margin-left: 8px; font-size: 0.9em; color: #9afcff; text-shadow: 0 0 6px rgba(0,255,255,0.35); }
+    #leaderboard.collapsed h3::after { content: '▶'; }
+    #leaderboard.collapsed .ranking-content { display: none; }
+    .leaderboard-section { background: rgba(10, 14, 28, 0.6); border: 1px solid #2a3b68; border-radius: 10px; padding: 12px; margin-bottom: 12px; box-shadow: 0 0 0 2px rgba(0,255,255,0.05) inset; }
+    .leaderboard-section h4 { color: #9afcff; margin: 0 0 8px 0; font-size: 1rem; text-align: center; text-shadow: 0 0 6px rgba(0,255,255,0.35); }
+    .score-entry { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin: 4px 0; background: rgba(18, 24, 44, 0.6); border-radius: 6px; border-left: 3px solid #00ffff; }
+    .score-entry:nth-child(1) { border-left-color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+    .score-entry:nth-child(2) { border-left-color: #c0c0c0; background: rgba(192, 192, 192, 0.1); }
+    .score-entry:nth-child(3) { border-left-color: #cd7f32; background: rgba(205, 127, 50, 0.1); }
+    .score-rank { font-weight: bold; color: #ffff00; font-size: 1.1rem; min-width: 30px; }
+    .score-name { flex: 1; text-align: center; color: #eafaff; font-weight: bold; letter-spacing: 0.5px; }
+    .score-value { color: #00ff00; font-weight: bold; font-size: 1rem; text-shadow: 0 0 5px #00ff00; }
+    .dept-badge { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; vertical-align: middle; }
+    .dept-badge img { height: 18px; width: auto; border-radius: 4px; border: 1px solid #2a3b68; background: rgba(10, 14, 28, 0.5); box-shadow: 0 0 0 2px rgba(0,255,255,0.05) inset; }
+    .dept-badge .dept-text { font-size: 0.95rem; color: #b8d6ff; opacity: 0.95; }
+    .game-mode-buttons { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+    .game-mode-buttons button { width: 100%; padding: 16px 14px; border-radius: 10px; border: 2px solid #34e9ff; background: linear-gradient(180deg, #0b0f1a, #0f1424); color: #ffffff; font-family: 'Press Start 2P', cursive; font-size: clamp(0.78rem, 2.8vw, 0.85rem); letter-spacing: 1px; cursor: pointer; transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease; box-shadow: 0 0 0 3px rgba(255,0,255,0.05) inset, 0 0 14px rgba(0,255,255,0.25); text-align: center; }
+    .game-mode-buttons button:hover { transform: translateY(-2px); border-color: #ff4dff; box-shadow: 0 0 0 3px rgba(255,0,255,0.12) inset, 0 10px 28px rgba(255, 0, 255, 0.35), 0 0 22px rgba(0,255,255,0.25); background: linear-gradient(180deg, #10162a, #131a32); }
+    .game-mode-buttons button small { display: block; font-family: 'VT323', monospace; font-size: 1rem; margin-top: 8px; opacity: 0.9; letter-spacing: 0.5px; color: #b8d6ff; }
+    #player-name-input { background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 10px 0 6px; width: 100%; max-width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset; }
+    #player-name-input:focus { outline: none; box-shadow: 0 0 18px rgba(0, 255, 255, 0.35); border-color: #ff4dff; }
+    #player-name-input::placeholder { color: #a6b7d1; opacity: 0.85; letter-spacing: 0.5px; }
+    @media (max-width: 480px) { #game-container { padding: 12px 10px; } #game-area { width: 100%; padding: 14px; border-radius: 12px; } #hud { margin-bottom: 14px; } #target-display, #forbidden-display { padding: 12px; } #chat-area { max-height: 28vh; overflow-y: auto; } .score-entry { padding: 6px 8px; } #leaderboard { padding: 12px; } .game-mode-buttons { gap: 10px; } .game-mode-buttons button { padding: 14px; } #buttons button { min-width: 120px; } }
+    @supports (padding: max(0px)) { body { padding-bottom: max(env(safe-area-inset-bottom), 0px); } }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>행사 준비</h1>
-    <label for="dept">학과 선택</label>
-    <select id="dept">
-      <option value="">학과 선택</option>
-      <option value="com">컴퓨터교육과</option>
-    </select>
-    <label for="name">닉네임</label>
-    <input id="name" type="text" placeholder="닉네임 입력 (2~20자)" maxlength="20" />
-    <div id="msg" class="error"></div>
-    <button id="saveBtn">저장하고 시작하기</button>
-    <div class="note">저장 후 메인 페이지로 이동합니다. 언제든 다시 변경 가능해요.</div>
+  <div id="game-container">
+    <div id="menu" class="show">
+      <h1 id="title">VOICE TABOO</h1>
+      <h2>Web Edition</h2>
+            
+      <input type="text" id="player-name-input" placeholder="플레이어 이름을 입력하세요" maxlength="20">
+      <select id="dept-select" style="background: rgba(24, 34, 60, 0.7); border: 2px solid #34e9ff; border-radius: 8px; padding: 12px 15px; margin: 8px 0 6px; width: 100%; color: #ffffff; font-size: 1.05rem; font-family: 'VT323', monospace; text-align: center; box-sizing: border-box; box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset;">
+        <option value="">학과를 선택하세요</option>
+        <option value="ko">국어교육과</option>
+        <option value="en">영어교육과</option>
+        <option value="soc">사회교육과</option>
+        <option value="geo">지리교육과</option>
+        <option value="eth">윤리교육과</option>
+        <option value="math">수학교육과</option>
+        <option value="sci">과학교육학부</option>
+        <option value="com">컴퓨터교육과</option>
+        <option value="pe">체육교육과</option>
+      </select>
+      <div id="name-validation-message" style="color: red; font-size: 0.9rem; margin-top: 5px; min-height: 1.2rem;"></div>
+            
+      <div class="game-mode-buttons">
+        <button onclick="startGame('TIME_ATTACK')">⏱️ TIME ATTACK<br><small>제한시간 내 최대 점수</small></button>
+        <button onclick="startGame('SPEED_RUN')">⚡ SPEED RUN<br><small>최단시간 클리어</small></button>
+      </div>
+            
+      <div id="leaderboard" class="collapsed">
+        <h3 onclick="toggleRanking()">🏆 RANKING</h3>
+        <div class="ranking-content">
+          <div class="leaderboard-section">
+            <h4>⏱️ TIME ATTACK</h4>
+            <div id="time-attack-leaderboard">
+              <div id="time-attack-scores"></div>
+            </div>
+          </div>
+                    
+          <div class="leaderboard-section">
+            <h4>⚡ SPEED RUN</h4>
+            <div id="speed-run-leaderboard">
+              <div id="speed-run-scores"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-area" style="display: none;">
+      <div id="hud">
+        <div>SCORE: <span id="score">0</span></div>
+        <div id="timer">TIME: 60</div>
+      </div>
+
+      <div id="target-display">
+        <div>TARGET</div>
+        <div id="target-word">LOADING...</div>
+      </div>
+
+      <div id="forbidden-display">
+        <div>FORBIDDEN</div>
+        <div id="forbidden-words">LOADING...</div>
+      </div>
+
+      <div id="controls">
+        <button id="record-btn" onclick="toggleRecording()">🎤</button>
+        <div id="status">Ready to record</div>
+      </div>
+
+      <div id="chat-area"></div>
+
+      <div id="buttons">
+        <button onclick="skipWord()">SKIP</button>
+        <button onclick="resetGame()">RESET</button>
+      </div>
+    </div>
   </div>
 
   <script>
-    function normalizeNameForCheck(name){
-      if(!name) return '';
-      let s=String(name).toLowerCase().normalize('NFKD').replace(/[\s_\-\.\u200b\u200c\u200d]/g,'');
-      const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','8':'b'};
-      s=s.replace(/[0134578]/g,ch=>map[ch]||ch);
-      return s.replace(/(.)\1{1,}/g,'$1');
-    }
-    function isInappropriateName(name){
-      const banned=[]; // 간단 버전(메인에 상세 로직 존재)
-      const norm=normalizeNameForCheck(name);
-      if(!norm) return true;
-      return banned.some(kw=>normalizeNameForCheck(kw)&&norm.includes(normalizeNameForCheck(kw)));
-    }
-    function validateName(name){
-      const raw=(name||'').trim();
-      if(raw.length<2) return '이름은 2자 이상이어야 합니다.';
-      if(raw.length>20) return '이름은 20자 이하여야 합니다.';
-      if(isInappropriateName(raw)) return '부적절한 이름입니다. 다른 이름을 입력해 주세요.';
-      return '';
+    const TIME_ATTACK_DURATION = 120;
+    const SPEED_RUN_GOAL = 5;
+    const SKIP_PENALTY_SECONDS = 2;
+    const MAX_SCORES = 10;
+    const DEPT_LABELS = { ko:'국어교육과', en:'영어교육과', soc:'사회교육과', geo:'지리교육과', eth:'윤리교육과', math:'수학교육과', sci:'과학교육학부', com:'컴퓨터교육과', pe:'체육교육과' };
+
+    async function saveScore(mode, score) {
+      const playerName = localStorage.getItem('playerName') || 'Player';
+      const deptCode = localStorage.getItem('deptCode') || '';
+      try {
+        const res = await fetch('/api/add-score', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, score, playerName, deptCode })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && data.success) {
+          try { localStorage.setItem('lastResult', JSON.stringify({ mode, score, ...(data || {}) })); } catch (_) {}
+          window.location.href = '/result';
+        } else {
+          updateLeaderboard();
+        }
+      } catch (error) { console.error('Failed to save score:', error); }
     }
 
-    const deptSel=document.getElementById('dept');
-    const nameInput=document.getElementById('name');
-    const msg=document.getElementById('msg');
-    const btn=document.getElementById('saveBtn');
+    function toggleRanking() {
+      const box = document.getElementById('leaderboard');
+      if (!box) return;
+      box.classList.toggle('collapsed');
+      const collapsed = box.classList.contains('collapsed') ? '1' : '0';
+      try { localStorage.setItem('rankingCollapsed', collapsed); } catch (_) {}
+    }
 
-    // 초기화
-    (function init(){
-      const savedDept=localStorage.getItem('deptCode')||'';
-      const savedName=localStorage.getItem('playerName')||'';
-      if(savedDept) deptSel.value=savedDept;
-      if(savedName) nameInput.value=savedName;
-    })();
-
-    btn.addEventListener('click',()=>{
-      const dept=deptSel.value;
-      const name=nameInput.value.trim();
-      msg.textContent='';
-      if(!dept){ msg.textContent='학과를 선택해 주세요.'; return; }
-      if(dept!=='com'){ msg.textContent='현재는 컴퓨터교육과(com)만 지원합니다.'; return; }
-      const v=validateName(name);
-      if(v){ msg.textContent=v; return; }
-      try{
-        localStorage.setItem('deptCode',dept);
-        localStorage.setItem('playerName',name);
-      }catch(_){ }
-      window.location.href='/';
+    window.addEventListener('DOMContentLoaded', () => {
+      const box = document.getElementById('leaderboard');
+      try { if (!box) return; const saved = localStorage.getItem('rankingCollapsed'); if (saved === '0') { box.classList.remove('collapsed'); } } catch (_) {}
     });
+
+    function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function resolveDeptImageCode(dept) { if (!dept) return ''; return dept; }
+    function renderDeptBadge(dept) {
+      if (!dept) return '';
+      const label = DEPT_LABELS[dept] || DEPT_LABELS[resolveDeptImageCode(dept)] || dept.toUpperCase();
+      const imgCode = resolveDeptImageCode(dept);
+      return `<span class="dept-badge"><img src="../images/${imgCode}.png" alt="${escapeHtml(label)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"/><span class="dept-text" style="display:none;">${escapeHtml(label)}</span></span>`;
+    }
+
+    async function updateLeaderboard() {
+      try {
+        const response = await fetch('/api/get-scores');
+        const data = await response.json();
+        const timeAttackScores = Array.isArray(data.timeAttackScores) ? data.timeAttackScores : [];
+        const speedRunScores = Array.isArray(data.speedRunScores) ? data.speedRunScores : [];
+        const timeAttackDiv = document.getElementById('time-attack-scores');
+        timeAttackDiv.innerHTML = timeAttackScores.length > 0 ? timeAttackScores.map((entry, index) => { const rank = index + 1; const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`; const dept = entry.deptCode || ''; const name = entry.playerName || ''; return `<div class="score-entry"><span class="score-rank">${medal}</span><span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span><span class="score-value">${entry.score}점</span></div>`; }).join('') : '<div class="score-entry"><span class="score-name">기록 없음</span></div>';
+        const speedRunDiv = document.getElementById('speed-run-scores');
+        speedRunDiv.innerHTML = speedRunScores.length > 0 ? speedRunScores.map((entry, index) => { const rank = index + 1; const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`; const dept = entry.deptCode || ''; const name = entry.playerName || ''; return `<div class="score-entry"><span class="score-rank">${medal}</span><span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span><span class="score-value">${entry.score}초</span></div>`; }).join('') : '<div class="score-entry"><span class="score-name">기록 없음</span></div>';
+      } catch (error) { console.error('Failed to load leaderboard:', error); }
+    }
+
+    // Load data (relative path from /formal)
+    let tabooBank = [];
+    fetch('../data/words.json').then(r=>r.json()).then(data=>{ tabooBank=data; }).catch(()=>{ tabooBank=[{"target":"버스","forbidden":["정류장","노선","환승","배차","카드"]},{"target":"피자","forbidden":["치즈","도우","토핑","조각","박스"]}]; });
+
+    class RoundState { constructor(target, forbidden) { this.target=target; this.forbidden=forbidden; this.solved=false; this.lastTranscription=null; this.feedback=null; this.aiReply=null; this.aiGuess=null; this.descriptionHistory=[]; this.tabooViolation=null; this.targetViolation=false; } }
+    class Game { constructor(){ this.timeMode="TIME_ATTACK"; this.playerName="PLAYER"; this.resetSession(); } resetSession(){ const k=Math.min(12,tabooBank.length); this.items=this.shuffleArray([...tabooBank]).slice(0,k); this.idx=0; this.round=null; this.score=0; this.startTs=null; this.elapsed=0.0; this.finished=false; this.solvedCount=0; this.skips=0; this.isRecording=false; } shuffleArray(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a;} start(){ this.resetSession(); this.startTs=performance.now()/1000; this.round=this.nextRound(); } nextRound(){ if(this.idx>=this.items.length) return null; const item=this.items[this.idx++]; return new RoundState(item.target,item.forbidden);} timeLeft(){ return this.timeMode==="TIME_ATTACK"? Math.max(0.0,TIME_ATTACK_DURATION-this.elapsed): Infinity;} goalCount(){ return this.timeMode==="SPEED_RUN"? SPEED_RUN_GOAL: 999999;} update(){ if(this.startTs!==null && !this.finished){ this.elapsed=performance.now()/1000-this.startTs; if(this.timeMode==="TIME_ATTACK" && this.elapsed>=TIME_ATTACK_DURATION){ this.finished=true; this.score=this.solvedCount; } } } async processAudio(text){ if(!this.round) return; this.round.lastTranscription=text; if(!text||text.trim()===""){ this.round.feedback="음성이 인식되지 않았습니다."; return;} const [fv,tv]=this.checkViolations(text,this.round.target,this.round.forbidden); if(tv){ this.round.targetViolation=true; this.round.feedback="목표어를 말했습니다! 라운드 실패"; this.round=this.nextRound(); } else if(fv){ this.round.tabooViolation=fv; this.round.feedback=`금지어 '${fv}' 사용! 라운드 실패`; this.round=this.nextRound(); } else { this.round.descriptionHistory.push(text.trim()); const reply=await this.askGuessWithAPI(this.round.descriptionHistory); this.round.aiReply=reply; const guess=this.extractGuessToken(reply); this.round.aiGuess=guess; if(guess && guess.toLowerCase()===this.round.target.toLowerCase()){ this.round.solved=true; this.solvedCount+=1; this.round.feedback="✅ 정답! AI가 맞혔습니다!"; if(this.timeMode==="SPEED_RUN" && this.solvedCount>=this.goalCount()){ this.finished=true; this.score=Math.round(this.elapsed*100)/100; } else { this.round=this.nextRound(); } } else { this.round.feedback="❌ 오답! 더 설명해주세요!"; } } if(this.round===null && !this.finished){ this.finished=true; if(this.timeMode==="SPEED_RUN") this.score=Math.round(this.elapsed*100)/100; else this.score=this.solvedCount; } } checkViolations(text,target,forbidden){ const tl=text.toLowerCase(); const tokenSet=new Set(tl.split(' ')); if(tokenSet.has(target.toLowerCase())||tl.includes(target.toLowerCase())) return [null,true]; for(const w of forbidden){ const wl=w.toLowerCase().trim(); if(wl && (tokenSet.has(wl)||tl.includes(wl))) return [w,false]; } return [null,false]; } async askGuessWithAPI(history){ const lines=history.map(h=>`- ${h}`).join('\n'); try{ const res=await fetch('/api/ai-guess',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ lines }) }); if(!res.ok) throw new Error(`ai-guess failed: ${res.status}`); const data=await res.json(); return (data && data.text)? data.text: "AI 응답이 비어 있습니다. [[모름]]"; }catch(e){ console.error('AI guess error:',e); return "AI와 통신 중 오류가 발생했습니다. [[오류]]"; } } extractGuessToken(text){ const m=text.match(/\[\[([가-힣\w]+)\]\]/); return m? m[1].trim():""; } skipWord(){ this.skips+=1; if(this.timeMode==="TIME_ATTACK" && this.startTs!==null){ this.startTs-=SKIP_PENALTY_SECONDS; } this.round=this.nextRound(); } }
+
+    let recognition; let isRecording=false;
+    function initSpeechRecognition(){ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SpeechRecognition){ updateStatus("이 브라우저는 음성 인식을 지원하지 않습니다."); return;} recognition=new SpeechRecognition(); recognition.lang='ko-KR'; recognition.continuous=true; recognition.interimResults=true; recognition.onresult=async (event)=>{ let finalTranscript=''; for(let i=event.resultIndex;i<event.results.length;i++){ if(event.results[i].isFinal){ finalTranscript+=event.results[i][0].transcript; } } if(finalTranscript && game){ addMessage('user','YOU: '+finalTranscript); await game.processAudio(finalTranscript); updateDisplay(); } }; recognition.onerror=(event)=>{ console.error('Speech recognition error:',event.error); updateStatus('음성 인식 오류: '+event.error); isRecording=false; updateRecordButton(); }; recognition.onend=()=>{ isRecording=false; updateRecordButton(); updateStatus('녹음 중지됨'); }; }
+
+    const scoreElement=document.getElementById('score');
+    const timerElement=document.getElementById('timer');
+    const targetWordElement=document.getElementById('target-word');
+    const forbiddenWordsElement=document.getElementById('forbidden-words');
+    const chatAreaElement=document.getElementById('chat-area');
+    const statusElement=document.getElementById('status');
+    const menuElement=document.getElementById('menu');
+    const gameAreaElement=document.getElementById('game-area');
+    const playerNameInput=document.getElementById('player-name-input');
+    const nameValidationMessage=document.getElementById('name-validation-message');
+    const deptSelect=document.getElementById('dept-select');
+    let game;
+
+    function startGame(mode){
+      const playerName=playerNameInput.value.trim();
+      const deptCode=(deptSelect.value||'').trim();
+      const validationMessage=validatePlayerName(playerName);
+      if(validationMessage){ alert(validationMessage); playerNameInput.focus(); return; }
+      if(!deptCode){ alert('학과를 선택해 주세요.'); deptSelect.focus(); return; }
+      localStorage.setItem('playerName', playerName);
+      localStorage.setItem('deptCode', deptCode);
+      if(tabooBank.length===0){ alert('게임 데이터가 아직 로드되지 않았습니다. 잠시 기다려주세요.'); return; }
+      game=new Game(); game.timeMode=mode; game.playerName=playerName; game.start();
+      menuElement.classList.remove('show'); gameAreaElement.style.display='flex';
+      updateDisplay(); initSpeechRecognition();
+    }
+
+    function toggleRecording(){ if(!recognition) return; if(isRecording){ recognition.stop(); } else { try{ recognition.start(); isRecording=true; updateRecordButton(); updateStatus('듣는 중...'); }catch(error){ console.error('Failed to start recognition:',error); updateStatus('음성 인식 시작 실패'); } } }
+    function updateRecordButton(){ const btn=document.getElementById('record-btn'); if(isRecording){ btn.classList.add('recording'); btn.textContent='⏹️'; } else { btn.classList.remove('recording'); btn.textContent='🎤'; } }
+    function updateStatus(text){ statusElement.textContent=text; }
+    function addMessage(type,text){ const div=document.createElement('div'); div.className=`message ${type}-message`; div.textContent=text; chatAreaElement.appendChild(div); chatAreaElement.scrollTop=chatAreaElement.scrollHeight; }
+    function updateDisplay(){ if(!game) return; const currentScore=game.solvedCount; scoreElement.textContent=currentScore; timerElement.textContent=game.timeMode==='TIME_ATTACK'? `TIME: ${Math.ceil(game.timeLeft())}`: `SOLVED: ${game.solvedCount}/${game.goalCount()}`; updateGameButtons(); if(game.finished){ targetWordElement.textContent='게임 종료'; forbiddenWordsElement.textContent=''; saveScore(game.timeMode, game.score); const scoreText=game.timeMode==='TIME_ATTACK'? `${game.score}단어`: `${game.score}초`; statusElement.textContent=`게임 종료! 최종 점수: ${scoreText}`; if(recognition) recognition.stop(); return; } if(game.round){ targetWordElement.textContent=game.round.target; forbiddenWordsElement.textContent=game.round.forbidden.join(' • '); chatAreaElement.innerHTML=''; if(game.round.lastTranscription) addMessage('user','YOU: '+game.round.lastTranscription); if(game.round.aiReply) addMessage('ai','AI: '+game.round.aiReply); if(game.round.feedback) statusElement.textContent=game.round.feedback; } }
+    function updateGameButtons(){ const buttonsDiv=document.getElementById('buttons'); buttonsDiv.innerHTML=game && game.finished? `<button onclick="resetGame()">메뉴</button><button onclick="restartGame()">다시하기</button>`: `<button onclick="skipWord()">스킵</button><button onclick="resetGame()">리셋</button>`; }
+    function restartGame(){ if(game){ const m=game.timeMode; resetGame(); startGame(m); } }
+    function resetGame(){ gameAreaElement.style.display='none'; menuElement.classList.add('show'); game=null; if(recognition) recognition.stop(); updateGameButtons(); }
+    function skipWord(){ if(game){ game.skipWord(); updateDisplay(); } }
+    function gameLoop(){ if(game){ game.update(); updateDisplay(); } requestAnimationFrame(gameLoop); }
+
+    window.onload=()=>{
+      updateLeaderboard(); updateGameButtons(); gameLoop();
+      const savedName=localStorage.getItem('playerName'); if(savedName) playerNameInput.value=savedName;
+      const savedDept=localStorage.getItem('deptCode'); if(savedDept && deptSelect) deptSelect.value=savedDept;
+      loadBannedKeywords();
+      playerNameInput.addEventListener('input', ()=>{ const m=validatePlayerName(playerNameInput.value); nameValidationMessage.textContent=m; playerNameInput.style.borderColor=m? '#ff0000':'#34e9ff'; });
+      if(deptSelect){ deptSelect.addEventListener('change', ()=>{ try{ localStorage.setItem('deptCode', deptSelect.value || ''); }catch(_){} }); }
+    };
+
+    let bannedKeywords=[];
+    async function loadBannedKeywords(){ try{ const res=await fetch('../banned_keywords.txt'); if(!res.ok) return; const text=await res.text(); bannedKeywords=text.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#')); }catch(e){ console.warn('Failed to load banned keywords:',e); } }
+    function normalizeNameForCheck(name){ if(!name) return ''; let s=String(name).toLowerCase().normalize('NFKD').replace(/[\s_\-\.\u200b\u200c\u200d]/g,''); const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','8':'b'}; s=s.replace(/[0134578]/g, ch=>map[ch]||ch); return s.replace(/(.)\1{1,}/g,'$1'); }
+    function isInappropriateName(name){ const norm=normalizeNameForCheck(name); if(!norm) return true; return bannedKeywords.some(kw=>{ const nkw=normalizeNameForCheck(kw); return nkw && norm.includes(nkw); }); }
+    function validatePlayerName(name){ const raw=(name||'').trim(); if(raw.length<2) return '이름은 2자 이상이어야 합니다.'; if(raw.length>20) return '이름은 20자 이하여야 합니다.'; if(isInappropriateName(raw)) return '부적절한 이름입니다. 다른 이름을 입력해 주세요.'; return ''; }
   </script>
 </body>
 </html>

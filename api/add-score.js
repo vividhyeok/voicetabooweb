@@ -1,18 +1,24 @@
 import { kv } from '@vercel/kv';
 
-// 사범대 학과 라벨(현재 행사: 컴퓨터교육과만 사용)
+// 사범대 학과 라벨(허용 코드)
 const DEPTS = {
+  ko: '국어교육과',
+  en: '영어교육과',
+  soc: '사회교육과',
+  geo: '지리교육과',
+  eth: '윤리교육과',
+  math: '수학교육과',
+  sci: '과학교육학부',
   com: '컴퓨터교육과',
+  pe: '체육교육과',
 };
 
 function assertValidDept(code) {
   if (!code) return '';
   const c = String(code).toLowerCase();
-  if (c === 'ce') {
-    // 더 이상 'ce' 별칭은 허용하지 않음
-    throw new Error('invalid_dept');
-  }
-  return DEPTS[c] ? c : '';
+  if (c === 'ce') throw new Error('invalid_dept');
+  if (DEPTS[c]) return c;
+  throw new Error('invalid_dept');
 }
 
 export default async function handler(request, response) {
