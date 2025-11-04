@@ -17,8 +17,18 @@ export default async function handler(request, response) {
       return `:${y}${m}${day}`;
     }
     const suffix = scopeSuffix();
-    const timeAttackScoresRaw = await kv.zrange(`scores:time_attack${suffix}`, 0, 9, { withScores: true });
-    const speedRunScoresRaw = await kv.zrange(`scores:speed_run${suffix}`, 0, 9, { withScores: true });
+    let timeAttackScoresRaw = await kv.zrange(`scores:time_attack${suffix}`, 0, 9, { withScores: true });
+    let speedRunScoresRaw = await kv.zrange(`scores:speed_run${suffix}`, 0, 9, { withScores: true });
+
+    // Fallback to legacy keys if scoped sets are empty (for smooth rollout)
+    const emptyTA = !Array.isArray(timeAttackScoresRaw) || timeAttackScoresRaw.length === 0;
+    const emptySR = !Array.isArray(speedRunScoresRaw) || speedRunScoresRaw.length === 0;
+    if (emptyTA) {
+      try { timeAttackScoresRaw = await kv.zrange('scores:time_attack', 0, 9, { withScores: true }); } catch (_) {}
+    }
+    if (emptySR) {
+      try { speedRunScoresRaw = await kv.zrange('scores:speed_run', 0, 9, { withScores: true }); } catch (_) {}
+    }
 
     const parseScores = (rawScores) => {
         const scores = [];

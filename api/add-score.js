@@ -64,13 +64,20 @@ export default async function handler(request, response) {
     // For TIME_ATTACK, higher scores are better. For SPEED_RUN, lower scores are better.
     const sortScore = mode === 'TIME_ATTACK' ? score * -1 : score; // 낮을수록 상위
 
-    // Add the new score to the sorted set
+    // Add the new score to the sorted set (scoped)
     await kv.zadd(key, { score: sortScore, member: JSON.stringify(newEntry) });
     // 전체 플레이 기록 세트 (백분위 계산용) - 멤버를 유니크하게 유지
     await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
 
-    // Keep only the top 10 on leaderboard
-    await kv.zremrangebyrank(key, 10, -1);
+    // Also write to legacy (unsuffixed) keys for backward-compat/fallback during rollout
+    try {
+      await kv.zadd(base, { score: sortScore, member: JSON.stringify(newEntry) });
+      await kv.zadd(`${base}:all`, { score: sortScore, member: newEntry.id });
+    } catch (_) {}
+
+  // Keep only the top 10 on leaderboard
+  await kv.zremrangebyrank(key, 10, -1);
+  try { await kv.zremrangebyrank(base, 10, -1); } catch (_) {}
 
     // 백분위 계산
     const total = await kv.zcard(keyAll).catch(() => 0);
