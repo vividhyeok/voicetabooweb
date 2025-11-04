@@ -95,3 +95,4 @@ recordings/
 # 스코어 파일 백업
 scores_backup/
 *.bak
+.vercel
