@@ -435,6 +435,25 @@
             opacity: 0.85;
             letter-spacing: 0.5px;
         }
+
+        #diagnostic-link {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 0.85rem;
+            opacity: 0.6;
+        }
+
+        #diagnostic-link a {
+            color: #34e9ff;
+            text-decoration: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        #diagnostic-link a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -468,6 +487,10 @@
                         </div>
                     </div>
                 </div>
+            </div>
+            
+            <div id="diagnostic-link">
+                <a onclick="VTW_DIAG(); return false;" title="시스템 진단 실행 (콘솔 확인)">🔧 시스템 진단</a>
             </div>
         </div>
 
@@ -1090,6 +1113,130 @@
             if (isInappropriateName(raw)) return '부적절한 이름입니다. 다른 이름을 입력해 주세요.';
             return '';
         }
+
+        // --- Diagnostic Function for Troubleshooting ---
+        /**
+         * VTW_DIAG - Voice Taboo Web Diagnostic Function
+         * Checks the status of all critical endpoints and displays results in console
+         * @param {boolean} write - If true, writes detailed diagnostic results to console
+         */
+        window.VTW_DIAG = async function(write = false) {
+            const results = {
+                ai: null,
+                lb: null,
+                lastResult: null
+            };
+
+            // Check AI endpoint
+            try {
+                const aiRes = await fetch('/api/ai-guess', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lines: '테스트' })
+                });
+                const aiData = await aiRes.json();
+                results.ai = {
+                    status: aiRes.status,
+                    ok: aiRes.ok,
+                    hasError: !!aiData.error,
+                    errorType: aiData.error || null,
+                    response: aiData.text || null
+                };
+            } catch (e) {
+                results.ai = { error: e.message };
+            }
+
+            // Check KV health endpoint
+            try {
+                const kvRes = await fetch('/api/kv-health');
+                const kvData = await kvRes.json();
+                results.kv = {
+                    status: kvRes.status,
+                    ok: kvData.ok || false,
+                    env: kvData.env || {},
+                    error: kvData.error || null
+                };
+            } catch (e) {
+                results.kv = { error: e.message };
+            }
+
+            // Check leaderboard endpoint
+            try {
+                const lbRes = await fetch('/api/get-scores');
+                const lbData = await lbRes.json();
+                results.lb = {
+                    status: lbRes.status,
+                    ok: lbRes.ok,
+                    hasError: !!lbData.error,
+                    errorType: lbData.error || null,
+                    timeAttackCount: Array.isArray(lbData.timeAttackScores) ? lbData.timeAttackScores.length : 0,
+                    speedRunCount: Array.isArray(lbData.speedRunScores) ? lbData.speedRunScores.length : 0
+                };
+            } catch (e) {
+                results.lb = { error: e.message };
+            }
+
+            // Check localStorage for last result
+            try {
+                const lastResultStr = localStorage.getItem('lastResult');
+                if (lastResultStr) {
+                    results.lastResult = JSON.parse(lastResultStr);
+                } else {
+                    results.lastResult = { message: 'No last result found' };
+                }
+            } catch (e) {
+                results.lastResult = { error: e.message };
+            }
+
+            // Display results
+            console.log('[VTW DIAG RESULT]', results);
+
+            // Check for KV connection issues and display helpful message
+            if (results.kv && !results.kv.ok) {
+                const envInfo = results.kv.env || {};
+                const hasUrl = envInfo.has_KV_REST_API_URL || envInfo.has_UPSTASH_URL || envInfo.has_KV_URL || envInfo.has_REDIS_URL;
+                const hasToken = envInfo.has_KV_REST_API_TOKEN || envInfo.has_UPSTASH_TOKEN;
+                
+                if (!hasUrl || !hasToken) {
+                    console.error('%c⚠️ KV 연결이 안 됩니다. Vercel 환경변수 KV_REST_API_URL / KV_REST_API_TOKEN 확인 후 Redeploy 하세요.', 
+                        'color: #ff4444; font-size: 14px; font-weight: bold;');
+                    console.log('%c환경변수 상태:', 'font-weight: bold;', {
+                        'KV_REST_API_URL': hasUrl ? '✓ 설정됨' : '✗ 설정되지 않음',
+                        'KV_REST_API_TOKEN': hasToken ? '✓ 설정됨' : '✗ 설정되지 않음'
+                    });
+                } else {
+                    console.error('%c⚠️ KV 연결 오류:', 'color: #ff4444; font-size: 14px; font-weight: bold;', results.kv.error);
+                }
+            } else if (results.kv && results.kv.ok) {
+                console.log('%c✓ KV 연결 정상', 'color: #44ff44; font-weight: bold;');
+            }
+
+            // Check for AI issues
+            if (results.ai && results.ai.hasError) {
+                if (results.ai.errorType === 'openai_key_missing') {
+                    console.warn('%c⚠️ OpenAI API 키가 설정되지 않았습니다. OPENAI_API_KEY 환경변수를 확인하세요.', 
+                        'color: #ffaa44; font-size: 12px;');
+                } else {
+                    console.warn('%c⚠️ AI 엔드포인트 오류:', 'color: #ffaa44; font-size: 12px;', results.ai.errorType);
+                }
+            } else if (results.ai && results.ai.ok) {
+                console.log('%c✓ AI 엔드포인트 정상', 'color: #44ff44; font-weight: bold;');
+            }
+
+            // Check leaderboard
+            if (results.lb && results.lb.hasError && results.lb.errorType === 'kv_unavailable') {
+                console.warn('%c⚠️ 리더보드: KV를 사용할 수 없어 빈 리스트 반환', 'color: #ffaa44; font-size: 12px;');
+            } else if (results.lb && results.lb.ok) {
+                console.log('%c✓ 리더보드 정상', 'color: #44ff44; font-weight: bold;', 
+                    `(Time Attack: ${results.lb.timeAttackCount}, Speed Run: ${results.lb.speedRunCount})`);
+            }
+
+            return results;
+        };
+
+        // Make diagnostic function available in console
+        console.log('%c🔧 진단 함수 사용법: VTW_DIAG()', 'color: #00ffff; font-size: 13px; font-weight: bold;');
+        console.log('%c   모든 엔드포인트의 상태를 확인하고 문제를 진단합니다.', 'color: #aaaaaa; font-size: 11px;');
     </script>
 </body>
 </html>
