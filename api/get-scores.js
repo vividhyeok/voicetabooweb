@@ -17,12 +17,13 @@ export default async function handler(request, response) {
         return scores;
     };
 
-    const timeAttackScores = parseScores(timeAttackScoresRaw);
-    const speedRunScores = parseScores(speedRunScoresRaw);
+    const timeAttackScores = Array.isArray(timeAttackScoresRaw) ? parseScores(timeAttackScoresRaw) : [];
+    const speedRunScores = Array.isArray(speedRunScoresRaw) ? parseScores(speedRunScoresRaw) : [];
 
     return response.status(200).json({ timeAttackScores, speedRunScores });
   } catch (error) {
     console.error('Error fetching scores:', error);
-    return response.status(500).json({ error: 'Internal Server Error' });
+    // Graceful fallback so UI doesn't break when KV env is missing
+    return response.status(200).json({ timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' });
   }
 }

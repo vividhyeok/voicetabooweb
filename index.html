@@ -590,7 +590,9 @@
         async function updateLeaderboard() {
             try {
                 const response = await fetch('/api/get-scores');
-                const { timeAttackScores, speedRunScores } = await response.json();
+                const data = await response.json();
+                const timeAttackScores = Array.isArray(data.timeAttackScores) ? data.timeAttackScores : [];
+                const speedRunScores = Array.isArray(data.speedRunScores) ? data.speedRunScores : [];
 
                 const timeAttackDiv = document.getElementById('time-attack-scores');
                 timeAttackDiv.innerHTML = timeAttackScores.length > 0
