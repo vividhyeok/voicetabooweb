@@ -563,6 +563,11 @@
                 if (saved === '0') {
                     box.classList.remove('collapsed');
                 }
+                // 해시로 접근 시 자동으로 랭킹 펼치기
+                if (location.hash && location.hash.includes('leaderboard')) {
+                    box.classList.remove('collapsed');
+                    setTimeout(()=>{ box.scrollIntoView({behavior:'smooth', block:'start'}); }, 0);
+                }
             } catch (_) {}
         });
 
@@ -836,6 +841,17 @@
             recognition.continuous = true;
             recognition.interimResults = true;
 
+            function normalizeRepeats(text) {
+                if (!text) return '';
+                // 1) 1~4글자 반복이 3회 이상이면 2회로 축약 (예: 안녕안녕안녕 -> 안녕안녕)
+                let t = text.replace(/([가-힣A-Za-z0-9]{1,4})\1{2,}/g, '$1$1');
+                // 2) 단일 문자 3회 이상 반복은 2회로 축약 (예: !!! -> !!, ㅋㅋㅋ -> ㅋㅋ)
+                t = t.replace(/(.)\1{2,}/g, '$1$1');
+                // 3) 공백 정리
+                t = t.replace(/\s{2,}/g, ' ').trim();
+                return t;
+            }
+
             recognition.onresult = async (event) => {
                 let finalPart = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -844,8 +860,10 @@
                     }
                 }
                 if (finalPart) {
-                    pendingTranscript += (pendingTranscript ? ' ' : '') + finalPart.trim();
-                    addMessage('user', 'YOU: ' + finalPart.trim());
+                    const cleaned = normalizeRepeats(finalPart.trim());
+                    if (!cleaned) return;
+                    pendingTranscript += (pendingTranscript ? ' ' : '') + cleaned;
+                    addMessage('user', 'YOU: ' + cleaned);
                 }
             };
             recognition.onerror = (event) => {

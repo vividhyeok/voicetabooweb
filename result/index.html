@@ -27,7 +27,7 @@
     </div>
   </div>
   <script>
-    const DEPT_LABELS={ com:'컴퓨터교육과' };
+  const DEPT_LABELS={ ko:'국어교육과', en:'영어교육과', soc:'사회교육과', geo:'지리교육과', eth:'윤리교육과', math:'수학교육과', sci:'과학교육학부', com:'컴퓨터교육과', pe:'체육교육과' };
     function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
     function formatPercent(p){ if(!isFinite(p)) return '—'; const v=Math.max(0,Math.min(100,p)); return (v<0.1? v.toFixed(2): v<1? v.toFixed(1): Math.round(v))+'%'; }
     (function init(){
