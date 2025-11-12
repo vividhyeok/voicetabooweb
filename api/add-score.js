@@ -28,8 +28,21 @@ export default async function handler(request, response) {
 
   const { mode, score, playerName, deptCode } = request.body || {};
 
-  if (!mode || score === undefined || !playerName) {
+  const normalizedMode = mode === 'SPEED_RUN' ? 'SPEED_RUN' : 'TIME_ATTACK';
+
+  const sanitizedName = String(playerName || '').trim();
+  if (!sanitizedName) {
     return response.status(400).json({ error: 'Missing required fields' });
+  }
+
+  let numericScore = Number(score);
+  if (!Number.isFinite(numericScore)) {
+    return response.status(400).json({ error: 'Invalid score' });
+  }
+  if (normalizedMode === 'TIME_ATTACK') {
+    numericScore = Math.max(0, Math.round(numericScore));
+  } else {
+    numericScore = Math.max(0, Math.round(numericScore * 100) / 100);
   }
 
   try {
@@ -44,23 +57,29 @@ export default async function handler(request, response) {
     const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
     const scopeSuffix = scope ? `:${scope}` : '';
     const base = `scores_debug${scopeSuffix}`;
-    const key = mode === 'TIME_ATTACK' ? `${base}:time_attack` : `${base}:speed_run`;
+    const key = normalizedMode === 'TIME_ATTACK' ? `${base}:time_attack` : `${base}:speed_run`;
+    const entryKey = `${base}:entry`;
     const keyAll = `${base}:all`;
     const safeDept = assertValidDept(deptCode);
     const newEntry = {
       id: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
-      playerName: String(playerName).trim(),
+      playerName: sanitizedName.slice(0, 40),
       deptCode: safeDept,
       deptLabel: safeDept ? DEPTS[safeDept] : '',
-      score,
-      mode,
+      score: numericScore,
+      mode: normalizedMode,
       date: new Date().toISOString(),
     };
 
-    const sortScore = mode === 'TIME_ATTACK' ? score * -1 : score;
+    const sortScore = normalizedMode === 'TIME_ATTACK' ? numericScore * -1 : numericScore;
 
     await kv.zadd(key, { score: sortScore, member: newEntry.id });
     await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
+    try {
+      await kv.set(`${entryKey}:${newEntry.id}`, JSON.stringify(newEntry));
+    } catch (error) {
+      console.error('Failed to persist entry payload:', error);
+    }
 
     await kv.zremrangebyrank(key, 10, -1);
 
