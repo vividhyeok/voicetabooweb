@@ -950,7 +950,7 @@
                     }
                     lastFinalSnippet = cleaned;
                     if (stoppedByUser) {
-                        scheduleTranscriptFinalize(60);
+                        scheduleTranscriptFinalize(140);
                     }
                 }
             };
@@ -961,7 +961,7 @@
                 lastFinalSnippet = '';
                 clearPendingFlushTimer();
                 if (stoppedByUser) {
-                    scheduleTranscriptFinalize(50);
+                    scheduleTranscriptFinalize(160);
                 }
                 updateRecordButton();
             };
@@ -969,7 +969,7 @@
                 if (stoppedByUser) {
                     isRecording = false;
                     updateRecordButton();
-                    scheduleTranscriptFinalize(40);
+                    scheduleTranscriptFinalize(160);
                     return;
                 }
 
@@ -1104,8 +1104,8 @@
                 stoppedByUser = true;
                 isRecording = false;
                 updateRecordButton();
-                updateStatus('판단 중...');
-                scheduleTranscriptFinalize(100);
+                updateStatus('입력을 정리하는 중...');
+                clearPendingFlushTimer();
                 try {
                     recognition.stop();
                 } catch (error) {
