@@ -19,17 +19,20 @@ export default async function handler(request, response) {
   try {
     const url = process.env.KV_REST_API_URL;
     const token = process.env.KV_REST_API_TOKEN;
+    const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
+    const scopeSuffix = scope ? `:${scope}` : '';
+    const baseKey = `scores_debug${scopeSuffix}`;
 
     if (!url || !token) {
       const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };
-      payload._diag = { reason: 'missing_vercel_kv_credentials', hasUrl: !!url, hasToken: !!token };
+      payload._diag = { reason: 'missing_vercel_kv_credentials', hasUrl: !!url, hasToken: !!token, scope: scope || null };
       return response.status(200).json(payload);
     }
 
     const kv = createClient({ url, token });
 
-    const keyTA = 'scores_debug:time_attack';
-    const keySR = 'scores_debug:speed_run';
+    const keyTA = `${baseKey}:time_attack`;
+    const keySR = `${baseKey}:speed_run`;
 
     let taRaw = await kv.zrange(keyTA, 0, 9).catch(() => []);
     let srRaw = await kv.zrange(keySR, 0, 9).catch(() => []);
@@ -38,7 +41,16 @@ export default async function handler(request, response) {
     const speedRunScores = srRaw || [];
 
     const body = { timeAttackScores, speedRunScores };
-    if (debug) body._debug = { suffix, keyTA, keySR, provider: 'vercel-kv', taCount: taRaw?.length || 0, srCount: srRaw?.length || 0 };
+    if (debug) {
+      body._debug = {
+        scope: scope || null,
+        keyTA,
+        keySR,
+        provider: 'vercel-kv',
+        taCount: taRaw?.length || 0,
+        srCount: srRaw?.length || 0,
+      };
+    }
     return response.status(200).json(body);
   } catch (error) {
     const payload = { timeAttackScores: [], speedRunScores: [], error: 'kv_unavailable' };

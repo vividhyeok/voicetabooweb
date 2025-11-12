@@ -1,5 +1,7 @@
 import { createClient } from '@vercel/kv';
 
+const scopeValue = (process.env.LEADERBOARD_SCOPE || '').trim();
+
 const kv = createClient({
   url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_URL || process.env.REDIS_URL,
   token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_READ_ONLY_TOKEN,
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
     has_KV_URL: !!process.env.KV_URL,
     has_REDIS_URL: !!process.env.REDIS_URL,
     prefix: process.env.KV_PREFIX || 'vtw',
-    scope: process.env.LEADERBOARD_SCOPE || 'global',
+    scope: scopeValue || null,
   };
   try {
     const key = `${env.prefix}:health:ping`;
