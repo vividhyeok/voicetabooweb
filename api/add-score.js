@@ -41,9 +41,11 @@ export default async function handler(request, response) {
     }
     const kv = createClient({ url, token });
 
-      const base = mode === 'TIME_ATTACK' ? 'scores_debug:time_attack' : 'scores_debug:speed_run';
-      const key = base;
-      const keyAll = `${base}:all`;
+    const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
+    const scopeSuffix = scope ? `:${scope}` : '';
+    const base = `scores_debug${scopeSuffix}`;
+    const key = mode === 'TIME_ATTACK' ? `${base}:time_attack` : `${base}:speed_run`;
+    const keyAll = `${base}:all`;
     const safeDept = assertValidDept(deptCode);
     const newEntry = {
       id: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
