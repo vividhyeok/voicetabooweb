@@ -81,11 +81,12 @@ export default async function handler(request, response) {
     await kv.zremrangebyrank(key, 10, -1);
     try { await kv.zremrangebyrank(base, 10, -1); } catch (_) {}
 
-    const total = await kv.zcard(keyAll).catch(() => 0);
+    const totalRaw = await kv.zcard(keyAll).catch(() => 0);
+    const total = Number(totalRaw) || 0;
     let rankIndex = null;
     try {
-      const betterOrEqual = await kv.zcount(keyAll, Number.NEGATIVE_INFINITY, sortScore);
-      rankIndex = Math.max(1, betterOrEqual);
+      const betterOrEqual = await kv.zcount(keyAll, '-inf', sortScore);
+      rankIndex = Math.max(1, Number(betterOrEqual) || 1);
     } catch (e) {
       rankIndex = 1;
     }
