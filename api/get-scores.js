@@ -11,13 +11,26 @@ function normalizePlayerName(name) {
 
 function filterUniquePlayers(entries, cap = MAX_DISPLAY) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
+
   const seen = new Set();
   const unique = [];
+
   for (const entry of entries) {
-    const key = normalizePlayerName(entry.playerName);
-    if (!key || seen.has(key)) continue;
+    if (!entry) continue;
+
+    const idKey = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : null;
+    const nameKey = normalizePlayerName(entry.playerName);
+    const deptKey = String(entry.deptCode || '').trim().toLowerCase();
+
+    // id 우선, 그 다음 이름+학과, 마지막으로 이름만
+    const key = idKey || (deptKey ? `${nameKey}::${deptKey}` : nameKey);
+
+    // 이름조차 비어 있으면 스킵 (id 없고 nameKey도 없으면 표시 불가)
+    if (!key || seen.has(key) || !nameKey) continue;
+
     seen.add(key);
     unique.push(entry);
+
     if (unique.length >= cap) break;
   }
   return unique;
