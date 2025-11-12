@@ -719,10 +719,10 @@
                 this.forbidden = forbidden;
                 this.solved = false;
                 this.lastTranscription = null;
+                this.lastDescription = null;
                 this.feedback = null;
                 this.aiReply = null;
                 this.aiGuess = null;
-                this.descriptionHistory = [];
                 this.tabooViolation = null;
                 this.targetViolation = false;
             }
@@ -814,8 +814,9 @@
                     this.round.feedback = `금지어 '${forbiddenViolation}' 사용! 라운드 실패`;
                     this.round = this.nextRound();
                 } else {
-                    this.round.descriptionHistory.push(text.trim());
-                    const reply = await this.askGuessWithAPI(this.round.descriptionHistory);
+                    const description = text.trim();
+                    this.round.lastDescription = description;
+                    const reply = await this.askGuessWithAPI(description);
                     this.round.aiReply = reply;
                     const guess = this.extractGuessToken(reply);
                     this.round.aiGuess = guess;
@@ -857,8 +858,8 @@
                 return [null, false];
             }
 
-            async askGuessWithAPI(history) {
-                const lines = history.map(h => `- ${h}`).join('\n');
+            async askGuessWithAPI(description) {
+                const lines = description ? `- ${description}` : '';
                 try {
                     const res = await fetch('/api/ai-guess', {
                         method: 'POST',
