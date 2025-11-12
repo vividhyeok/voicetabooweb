@@ -939,16 +939,42 @@
                 updateRecordButton();
             };
             recognition.onend = async () => {
-                isRecording = false;
-                updateRecordButton();
-                if (stoppedByUser && pendingTranscript.trim()) {
-                    updateStatus('판단 중...');
-                    try { await game.processAudio(pendingTranscript.trim()); } catch (e) { console.error(e); }
+                if (stoppedByUser) {
+                    const transcript = pendingTranscript.trim();
+                    isRecording = false;
+                    updateRecordButton();
+                    if (transcript) {
+                        updateStatus('판단 중...');
+                        try { await game.processAudio(transcript); } catch (e) { console.error(e); }
+                    } else {
+                        updateStatus('입력이 감지되지 않았습니다.');
+                    }
                     pendingTranscript = '';
                     stoppedByUser = false;
                     updateDisplay();
+                    return;
+                }
+
+                if (isRecording) {
+                    // 모바일 브라우저에서 무음 시 자동 종료되는 문제를 완화하기 위해 즉시 재시작
+                    try {
+                        updateStatus('듣는 중...');
+                        setTimeout(() => {
+                            try { recognition.start(); } catch (error) {
+                                console.error('Failed to auto-restart recognition:', error);
+                                isRecording = false;
+                                updateRecordButton();
+                                updateStatus('음성 인식이 중지되었습니다. 다시 시도하세요.');
+                            }
+                        }, 150);
+                    } catch (error) {
+                        console.error('Speech recognition restart error:', error);
+                        isRecording = false;
+                        updateRecordButton();
+                        updateStatus('음성 인식이 중지되었습니다. 다시 시도하세요.');
+                    }
                 } else {
-                    updateStatus('녹음 중지됨');
+                    updateStatus('녹음 대기중');
                 }
             };
         }
