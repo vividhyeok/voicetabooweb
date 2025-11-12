@@ -897,6 +897,8 @@
     let pendingTranscript = '';
     let stoppedByUser = false;
     let lastFinalSnippet = '';
+    let pendingFlushTimeout = null;
+    let finalizingTranscript = false;
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -946,6 +948,9 @@
                         addMessage('user', 'YOU: ' + addition);
                     }
                     lastFinalSnippet = cleaned;
+                    if (stoppedByUser) {
+                        scheduleTranscriptFinalize(60);
+                    }
                 }
             };
             recognition.onerror = (event) => {
@@ -953,23 +958,17 @@
                 updateStatus('음성 인식 오류: ' + event.error);
                 isRecording = false;
                 lastFinalSnippet = '';
+                clearPendingFlushTimer();
+                if (stoppedByUser) {
+                    scheduleTranscriptFinalize(50);
+                }
                 updateRecordButton();
             };
-            recognition.onend = async () => {
+            recognition.onend = () => {
                 if (stoppedByUser) {
-                    const transcript = pendingTranscript.trim();
                     isRecording = false;
                     updateRecordButton();
-                    if (transcript) {
-                        updateStatus('판단 중...');
-                        try { await game.processAudio(transcript); } catch (e) { console.error(e); }
-                    } else {
-                        updateStatus('입력이 감지되지 않았습니다.');
-                    }
-                    pendingTranscript = '';
-                    lastFinalSnippet = '';
-                    stoppedByUser = false;
-                    updateDisplay();
+                    scheduleTranscriptFinalize(40);
                     return;
                 }
 
@@ -995,6 +994,50 @@
                     updateStatus('녹음 대기중');
                 }
             };
+        }
+
+        function clearPendingFlushTimer() {
+            if (pendingFlushTimeout) {
+                clearTimeout(pendingFlushTimeout);
+                pendingFlushTimeout = null;
+            }
+        }
+
+        function scheduleTranscriptFinalize(delay = 160) {
+            clearPendingFlushTimer();
+            pendingFlushTimeout = setTimeout(() => finalizePendingTranscript(), delay);
+        }
+
+        async function finalizePendingTranscript() {
+            if (finalizingTranscript) return;
+            clearPendingFlushTimer();
+            finalizingTranscript = true;
+
+            const transcript = pendingTranscript.trim();
+            pendingTranscript = '';
+            lastFinalSnippet = '';
+            stoppedByUser = false;
+            isRecording = false;
+            updateRecordButton();
+
+            if (!transcript) {
+                updateStatus('입력이 감지되지 않았습니다.');
+                updateDisplay();
+                finalizingTranscript = false;
+                return;
+            }
+
+            updateStatus('판단 중...');
+            try {
+                if (game) {
+                    await game.processAudio(transcript);
+                }
+            } catch (error) {
+                console.error('Failed to process transcript:', error);
+                updateStatus('판단에 실패했습니다. 다시 시도해 주세요.');
+            }
+            updateDisplay();
+            finalizingTranscript = false;
         }
 
         // DOM Elements
@@ -1058,7 +1101,16 @@
             if (!recognition) return;
             if (isRecording) {
                 stoppedByUser = true;
-                recognition.stop();
+                isRecording = false;
+                updateRecordButton();
+                updateStatus('판단 중...');
+                scheduleTranscriptFinalize(100);
+                try {
+                    recognition.stop();
+                } catch (error) {
+                    console.error('Failed to stop recognition:', error);
+                    finalizePendingTranscript();
+                }
             } else {
                 try {
                     recognition.start();
@@ -1066,6 +1118,8 @@
                     pendingTranscript = '';
                     lastFinalSnippet = '';
                     stoppedByUser = false;
+                    clearPendingFlushTimer();
+                    finalizingTranscript = false;
                     updateRecordButton();
                     updateStatus('듣는 중...');
                 } catch (error) {
@@ -1151,6 +1205,8 @@
             pendingTranscript = '';
             lastFinalSnippet = '';
             stoppedByUser = false;
+            finalizingTranscript = false;
+            clearPendingFlushTimer();
             if (recognition) {
                 isRecording = false;
                 recognition.stop();
