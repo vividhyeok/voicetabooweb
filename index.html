@@ -896,6 +896,7 @@
     let isRecording = false;
     let pendingTranscript = '';
     let stoppedByUser = false;
+    let lastFinalSnippet = '';
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -903,6 +904,7 @@
                 return;
             }
             recognition = new SpeechRecognition();
+            lastFinalSnippet = '';
             recognition.lang = 'ko-KR';
             recognition.continuous = true;
             recognition.interimResults = true;
@@ -928,14 +930,29 @@
                 if (finalPart) {
                     const cleaned = normalizeRepeats(finalPart.trim());
                     if (!cleaned) return;
-                    pendingTranscript += (pendingTranscript ? ' ' : '') + cleaned;
-                    addMessage('user', 'YOU: ' + cleaned);
+                    let addition = cleaned;
+                    if (lastFinalSnippet && cleaned.startsWith(lastFinalSnippet)) {
+                        addition = cleaned.slice(lastFinalSnippet.length).trim();
+                    } else if (pendingTranscript && pendingTranscript.startsWith(cleaned)) {
+                        addition = '';
+                    } else if (!pendingTranscript) {
+                        addition = cleaned;
+                    } else if (cleaned.startsWith(pendingTranscript)) {
+                        addition = cleaned.slice(pendingTranscript.length).trim();
+                    }
+
+                    if (addition) {
+                        pendingTranscript += (pendingTranscript ? ' ' : '') + addition;
+                        addMessage('user', 'YOU: ' + addition);
+                    }
+                    lastFinalSnippet = cleaned;
                 }
             };
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 updateStatus('음성 인식 오류: ' + event.error);
                 isRecording = false;
+                lastFinalSnippet = '';
                 updateRecordButton();
             };
             recognition.onend = async () => {
@@ -950,6 +967,7 @@
                         updateStatus('입력이 감지되지 않았습니다.');
                     }
                     pendingTranscript = '';
+                    lastFinalSnippet = '';
                     stoppedByUser = false;
                     updateDisplay();
                     return;
@@ -1046,6 +1064,7 @@
                     recognition.start();
                     isRecording = true;
                     pendingTranscript = '';
+                    lastFinalSnippet = '';
                     stoppedByUser = false;
                     updateRecordButton();
                     updateStatus('듣는 중...');
@@ -1129,7 +1148,13 @@
             gameAreaElement.style.display = 'none';
             menuElement.classList.add('show');
             game = null;
-            if(recognition) recognition.stop();
+            pendingTranscript = '';
+            lastFinalSnippet = '';
+            stoppedByUser = false;
+            if (recognition) {
+                isRecording = false;
+                recognition.stop();
+            }
             updateGameButtons();
         }
 
@@ -1141,6 +1166,7 @@
                     statusElement.textContent = `다음 카드로 넘어갑니다${penaltyNote}!`;
                 }
                 pendingTranscript = '';
+                lastFinalSnippet = '';
                 updateDisplay();
             }
         }
