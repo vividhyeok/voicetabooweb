@@ -234,6 +234,72 @@
             display: flex;
         }
 
+        #event-banner {
+            width: 100%;
+            border-radius: 14px;
+            padding: 18px 16px;
+            background: linear-gradient(145deg, rgba(255, 77, 255, 0.1), rgba(0, 255, 255, 0.12));
+            border: 2px solid rgba(148, 248, 255, 0.5);
+            box-shadow: 0 0 18px rgba(0, 255, 255, 0.18);
+            text-align: center;
+        }
+
+        #event-banner .banner-title {
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(0.95rem, 3.2vw, 1.1rem);
+            color: #ffe56d;
+            margin: 0 0 10px;
+            text-shadow: 0 0 10px rgba(255, 229, 109, 0.45);
+            letter-spacing: 1px;
+        }
+
+        #event-banner .banner-desc {
+            margin: 0;
+            color: #eafaff;
+            font-size: clamp(0.95rem, 3.4vw, 1.05rem);
+            line-height: 1.5;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .dept-field {
+            width: 100%;
+        }
+
+        .select-input {
+            background: rgba(24, 34, 60, 0.7);
+            border: 2px solid #34e9ff;
+            border-radius: 8px;
+            padding: 12px 40px 12px 15px;
+            margin: 8px 0 6px;
+            width: 100%;
+            max-width: 100%;
+            color: #ffffff;
+            font-size: 1.05rem;
+            font-family: 'VT323', monospace;
+            box-sizing: border-box;
+            box-shadow: 0 0 0 3px rgba(0,255,255,0.06) inset;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='18' height='18'%3E%3Cpath fill='%239afcff' d='M7 10l5 5 5-5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            text-align: left;
+        }
+
+        .select-input:focus {
+            outline: none;
+            border-color: #ff4dff;
+            box-shadow: 0 0 18px rgba(0, 255, 255, 0.35);
+        }
+
+        .select-input::-ms-expand {
+            display: none;
+        }
+
         #leaderboard {
             background: rgba(5, 8, 18, 0.8);
             border: 2px solid #34e9ff;
@@ -461,10 +527,29 @@
         <div id="menu" class="show">
             <h1 id="title">VOICE TABOO</h1>
             <h2>Web Edition</h2>
-            
+
+            <div id="event-banner">
+                <div class="banner-title" id="banner-title">Voice Taboo 체험존</div>
+                <p class="banner-desc" id="banner-desc">닉네임만 등록하고 사범대 상위 랭커에 도전해 보세요!</p>
+            </div>
+
             <input type="text" id="player-name-input" placeholder="플레이어 이름을 입력하세요" maxlength="20">
+            <div id="dept-field" class="dept-field hidden">
+                <select id="dept-select" class="select-input" aria-label="학과 선택">
+                    <option value="">학과를 선택하세요</option>
+                    <option value="ko">국어교육과</option>
+                    <option value="en">영어교육과</option>
+                    <option value="soc">사회교육과</option>
+                    <option value="geo">지리교육과</option>
+                    <option value="eth">윤리교육과</option>
+                    <option value="math">수학교육과</option>
+                    <option value="sci">과학교육학부</option>
+                    <option value="com">컴퓨터교육과</option>
+                    <option value="pe">체육교육과</option>
+                </select>
+            </div>
             <div id="name-validation-message" style="color: red; font-size: 0.9rem; margin-top: 5px; min-height: 1.2rem;"></div>
-            
+
             <div class="game-mode-buttons">
                 <button onclick="startGame('TIME_ATTACK')">⏱️ TIME ATTACK<br><small>제한시간 내 최대 점수</small></button>
                 <button onclick="startGame('SPEED_RUN')">⚡ SPEED RUN<br><small>최단시간 클리어</small></button>
@@ -529,8 +614,12 @@
         const TIME_ATTACK_DURATION = 120; // 2 minutes
         const SPEED_RUN_GOAL = 5; // 5 words
         const SKIP_PENALTY_SECONDS = 2;
-    const MAX_SCORES = 10;
-    // OpenAI 키는 클라이언트에 노출하지 않음. 서버리스 API를 통해 호출합니다.
+        const MAX_SCORES = 10;
+        // OpenAI 키는 클라이언트에 노출하지 않음. 서버리스 API를 통해 호출합니다.
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const boothType = (searchParams.get('type') || '').trim().toLowerCase();
+        const isTeacherChallenge = boothType === 'sa';
 
         // Department labels (code -> human readable). Add more as needed.
         const DEPT_LABELS = {
@@ -926,8 +1015,13 @@
         const statusElement = document.getElementById('status');
         const menuElement = document.getElementById('menu');
         const gameAreaElement = document.getElementById('game-area');
-    const playerNameInput = document.getElementById('player-name-input');
-    const nameValidationMessage = document.getElementById('name-validation-message');
+        const playerNameInput = document.getElementById('player-name-input');
+        const nameValidationMessage = document.getElementById('name-validation-message');
+        const deptFieldElement = document.getElementById('dept-field');
+        const deptSelectElement = document.getElementById('dept-select');
+        const bannerTitleElement = document.getElementById('banner-title');
+        const bannerDescElement = document.getElementById('banner-desc');
+        const subtitleElement = document.querySelector('#menu h2');
         
         let game;
 
@@ -940,6 +1034,19 @@
                 return;
             }
             localStorage.setItem('playerName', playerName);
+
+            if (isTeacherChallenge) {
+                const deptSelect = document.getElementById('dept-select');
+                const deptCode = deptSelect ? (deptSelect.value || '').trim() : '';
+                if (!deptCode) {
+                    alert('학과를 선택해 주세요.');
+                    if (deptSelect) deptSelect.focus();
+                    return;
+                }
+                try { localStorage.setItem('deptCode', deptCode); } catch (_) {}
+            } else {
+                try { localStorage.setItem('deptCode', ''); } catch (_) {}
+            }
 
             if (tabooBank.length === 0) {
                 alert('게임 데이터가 아직 로드되지 않았습니다. 잠시 기다려주세요.');
@@ -1077,12 +1184,13 @@
 
         // Initialize
         window.onload = () => {
+            configureBoothExperience();
             updateLeaderboard();
             updateGameButtons();
             gameLoop();
             const savedName = localStorage.getItem('playerName');
             if (savedName) playerNameInput.value = savedName;
-            
+
             loadBannedKeywords();
 
             playerNameInput.addEventListener('input', () => {
@@ -1090,7 +1198,39 @@
                 nameValidationMessage.textContent = message;
                 playerNameInput.style.borderColor = message ? '#ff0000' : '#34e9ff';
             });
+
+            if (deptSelectElement) {
+                deptSelectElement.addEventListener('change', () => {
+                    if (isTeacherChallenge) {
+                        try { localStorage.setItem('deptCode', deptSelectElement.value || ''); } catch (_) {}
+                    }
+                });
+            }
         };
+
+        function configureBoothExperience() {
+            if (isTeacherChallenge) {
+                if (subtitleElement) subtitleElement.textContent = '사범대생 랭킹 등록 부스';
+                if (bannerTitleElement) bannerTitleElement.textContent = '사범대 학생들을 이겨라!';
+                if (bannerDescElement) bannerDescElement.textContent = '사범대학 재학생은 닉네임과 학과를 등록해서 랭킹을 지키고, 방문 학생들은 기록을 넘어서 도장깨기에 도전해 보세요!';
+                if (playerNameInput) playerNameInput.placeholder = '닉네임을 입력하세요 (사범대생)';
+                if (deptFieldElement) deptFieldElement.classList.remove('hidden');
+                const savedDept = localStorage.getItem('deptCode');
+                if (deptSelectElement && savedDept) {
+                    deptSelectElement.value = savedDept;
+                }
+            } else {
+                if (subtitleElement) subtitleElement.textContent = '체험자 도전 모드';
+                if (bannerTitleElement) bannerTitleElement.textContent = 'Voice Taboo 체험존';
+                if (bannerDescElement) bannerDescElement.textContent = '닉네임만 등록하고 사범대 상위 랭커에 도전해 보세요!';
+                if (playerNameInput) playerNameInput.placeholder = '닉네임을 입력하세요';
+                if (deptFieldElement) deptFieldElement.classList.add('hidden');
+                if (deptSelectElement) {
+                    deptSelectElement.value = '';
+                }
+                try { localStorage.setItem('deptCode', ''); } catch (_) {}
+            }
+        }
 
         // --- Nickname moderation helpers ---
         let bannedKeywords = [];
