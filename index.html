@@ -502,8 +502,7 @@
             <div id="name-validation-message" style="color: red; font-size: 0.9rem; margin-top: 5px; min-height: 1.2rem;"></div>
 
             <div class="game-mode-buttons">
-                <button onclick="startGame('TIME_ATTACK')">⏱️ TIME ATTACK<br><small>제한시간 내 최대 점수</small></button>
-                <button onclick="startGame('SPEED_RUN')">⚡ SPEED RUN<br><small>최단시간 클리어</small></button>
+                <button onclick="startGame()">⏱️ TIME ATTACK<br><small>제한시간 내 최대 점수</small></button>
             </div>
             
             <div id="leaderboard" class="collapsed">
@@ -515,13 +514,6 @@
                             <div id="time-attack-scores"></div>
                         </div>
                     </div>
-                    
-                    <div class="leaderboard-section">
-                        <h4>⚡ SPEED RUN</h4>
-                        <div id="speed-run-leaderboard">
-                            <div id="speed-run-scores"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -529,7 +521,7 @@
         <div id="game-area" style="display: none;">
             <div id="hud">
                 <div>SCORE: <span id="score">0</span></div>
-                <div id="timer">TIME: 60</div>
+                <div id="timer">TIME: 120</div>
             </div>
 
             <div id="target-display">
@@ -558,10 +550,8 @@
 
     <script>
         // Constants
-        const TIME_ATTACK_DURATION = 120; // 2 minutes
-        const SPEED_RUN_GOAL = 5; // 5 words
-        const SKIP_PENALTY_SECONDS = 2;
-        const MAX_SCORES = 10;
+    const TIME_ATTACK_DURATION = 120; // 2 minutes
+    const SKIP_PENALTY_SECONDS = 2;
         // OpenAI 키는 클라이언트에 노출하지 않음. 서버리스 API를 통해 호출합니다.
 
         const searchParams = new URLSearchParams(window.location.search);
@@ -584,18 +574,18 @@
 
         // OpenAI 호출은 /api/ai-guess를 통해 이루어집니다.
 
-        async function saveScore(mode, score) {
+        async function saveScore(score) {
             const playerName = localStorage.getItem('playerName') || 'Player';
             const deptCode = localStorage.getItem('deptCode') || '';
             try {
                 const res = await fetch('/api/add-score', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode, score, playerName, deptCode })
+                    body: JSON.stringify({ score, playerName, deptCode })
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok && data && data.success) {
-                    try { localStorage.setItem('lastResult', JSON.stringify({ mode, score, ...(data || {}) })); } catch (_) {}
+                    try { localStorage.setItem('lastResult', JSON.stringify({ score, ...(data || {}) })); } catch (_) {}
                     // 결과 페이지로 이동
                     window.location.href = '/result';
                 } else {
@@ -654,12 +644,11 @@
             try {
                 const response = await fetch('/api/get-scores');
                 const data = await response.json();
-                const timeAttackScores = Array.isArray(data.timeAttackScores) ? data.timeAttackScores : [];
-                const speedRunScores = Array.isArray(data.speedRunScores) ? data.speedRunScores : [];
+                const scores = Array.isArray(data.scores) ? data.scores : [];
 
                 const timeAttackDiv = document.getElementById('time-attack-scores');
-                timeAttackDiv.innerHTML = timeAttackScores.length > 0
-                    ? timeAttackScores.map((entry, index) => {
+                timeAttackDiv.innerHTML = scores.length > 0
+                    ? scores.map((entry, index) => {
                         const rank = index + 1;
                         const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
                         const dept = entry.deptCode || '';
@@ -668,21 +657,6 @@
                             <span class="score-rank">${medal}</span>
                             <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
                             <span class="score-value">${entry.score}점</span>
-                        </div>`;
-                    }).join('')
-                    : '<div class="score-entry"><span class="score-name">기록 없음</span></div>';
-
-                const speedRunDiv = document.getElementById('speed-run-scores');
-                speedRunDiv.innerHTML = speedRunScores.length > 0
-                    ? speedRunScores.map((entry, index) => {
-                        const rank = index + 1;
-                        const medal = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
-                        const dept = entry.deptCode || '';
-                        const name = entry.playerName || '';
-                        return `<div class="score-entry">
-                            <span class="score-rank">${medal}</span>
-                            <span class="score-name">${escapeHtml(name)}${renderDeptBadge(dept)}</span>
-                            <span class="score-value">${entry.score}초</span>
                         </div>`;
                     }).join('')
                     : '<div class="score-entry"><span class="score-name">기록 없음</span></div>';
@@ -730,23 +704,22 @@
 
         class Game {
             constructor() {
-                this.timeMode = "TIME_ATTACK";
                 this.playerName = "PLAYER";
                 this.resetSession();
             }
 
             resetSession() {
-                const k = Math.min(12, tabooBank.length);
-                this.items = this.shuffleArray([...tabooBank]).slice(0, k);
+                const source = Array.isArray(tabooBank) ? [...tabooBank] : [];
+                const take = Math.min(12, source.length);
+                this.items = this.shuffleArray(source).slice(0, take);
                 this.idx = 0;
                 this.round = null;
                 this.score = 0;
                 this.startTs = null;
-                this.elapsed = 0.0;
+                this.elapsed = 0;
                 this.finished = false;
                 this.solvedCount = 0;
                 this.skips = 0;
-                this.isRecording = false;
             }
 
             shuffleArray(array) {
@@ -767,8 +740,7 @@
                 if (this.idx >= this.items.length) {
                     const pool = Array.isArray(tabooBank) ? [...tabooBank] : [];
                     if (pool.length) {
-                        const refillCount = Math.min(12, pool.length);
-                        const refill = this.shuffleArray(pool).slice(0, refillCount);
+                        const refill = this.shuffleArray(pool).slice(0, Math.min(12, pool.length));
                         this.items = this.items.concat(refill);
                     }
                 }
@@ -778,17 +750,13 @@
             }
 
             timeLeft() {
-                return this.timeMode === "TIME_ATTACK" ? Math.max(0.0, TIME_ATTACK_DURATION - this.elapsed) : Infinity;
-            }
-
-            goalCount() {
-                return this.timeMode === "SPEED_RUN" ? SPEED_RUN_GOAL : 999999;
+                return Math.max(0, TIME_ATTACK_DURATION - this.elapsed);
             }
 
             update() {
                 if (this.startTs !== null && !this.finished) {
                     this.elapsed = performance.now() / 1000 - this.startTs;
-                    if (this.timeMode === "TIME_ATTACK" && this.elapsed >= TIME_ATTACK_DURATION) {
+                    if (this.elapsed >= TIME_ATTACK_DURATION) {
                         this.finished = true;
                         this.score = this.solvedCount;
                     }
@@ -824,13 +792,9 @@
                     if (guess && guess.toLowerCase() === this.round.target.toLowerCase()) {
                         this.round.solved = true;
                         this.solvedCount += 1;
+                        this.score = this.solvedCount;
                         this.round.feedback = "✅ 정답! AI가 맞혔습니다!";
-                        if (this.timeMode === "SPEED_RUN" && this.solvedCount >= this.goalCount()) {
-                            this.finished = true;
-                            this.score = Math.round(this.elapsed * 100) / 100;
-                        } else {
-                            this.round = this.nextRound();
-                        }
+                        this.round = this.nextRound();
                     } else {
                         this.round.feedback = "❌ 오답! 더 설명해주세요!";
                     }
@@ -838,8 +802,7 @@
 
                 if (this.round === null && !this.finished) {
                     this.finished = true;
-                    if (this.timeMode === "SPEED_RUN") this.score = Math.round(this.elapsed * 100) / 100;
-                    else this.score = this.solvedCount;
+                    this.score = this.solvedCount;
                 }
             }
 
@@ -882,12 +845,13 @@
 
             skipWord() {
                 this.skips += 1;
-                if (this.timeMode === "TIME_ATTACK" && this.startTs !== null) {
+                if (this.startTs !== null) {
                     this.startTs -= SKIP_PENALTY_SECONDS;
                 }
                 this.round = this.nextRound();
                 if (!this.round) {
-                    this.round = this.nextRound();
+                    this.finished = true;
+                    this.score = this.solvedCount;
                 }
             }
         }
@@ -1058,7 +1022,7 @@
         
         let game;
 
-        function startGame(mode) {
+        function startGame() {
             const playerName = playerNameInput.value.trim();
             const validationMessage = validatePlayerName(playerName);
             if (validationMessage) {
@@ -1087,7 +1051,6 @@
             }
 
             game = new Game();
-            game.timeMode = mode;
             game.playerName = playerName;
             game.start();
 
@@ -1158,18 +1121,15 @@
 
             const currentScore = game.solvedCount;
             scoreElement.textContent = currentScore;
-            timerElement.textContent = game.timeMode === 'TIME_ATTACK'
-                ? `TIME: ${Math.ceil(game.timeLeft())}`
-                : `SOLVED: ${game.solvedCount}/${game.goalCount()}`;
+            timerElement.textContent = `TIME: ${Math.ceil(game.timeLeft())}`;
 
             updateGameButtons();
 
             if (game.finished) {
                 targetWordElement.textContent = '게임 종료';
                 forbiddenWordsElement.textContent = '';
-                saveScore(game.timeMode, game.score);
-                const scoreText = game.timeMode === 'TIME_ATTACK' ? `${game.score}단어` : `${game.score}초`;
-                statusElement.textContent = `게임 종료! 최종 점수: ${scoreText}`;
+                saveScore(game.score);
+                statusElement.textContent = `게임 종료! 최종 점수: ${game.score}단어`;
                 if (recognition) recognition.stop();
                 return;
             }
@@ -1193,9 +1153,8 @@
         
         function restartGame() {
             if (game) {
-                const currentMode = game.timeMode;
                 resetGame();
-                startGame(currentMode);
+                startGame();
             }
         }
 
@@ -1219,8 +1178,7 @@
             if (game) {
                 game.skipWord();
                 if (!game.finished) {
-                    const penaltyNote = game.timeMode === 'TIME_ATTACK' ? ' (2초 페널티)' : '';
-                    statusElement.textContent = `다음 카드로 넘어갑니다${penaltyNote}!`;
+                    statusElement.textContent = '다음 카드로 넘어갑니다 (2초 페널티)!';
                 }
                 pendingTranscript = '';
                 lastFinalSnippet = '';

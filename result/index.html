@@ -25,7 +25,6 @@
     <h1>플레이 결과</h1>
     <div id="summary" class="summary">로딩 중...</div>
     <div class="metric-row">
-      <div class="chip"><div class="label">RANK</div><div id="rankVal" class="value">—</div></div>
       <div class="chip"><div class="label">SCORE</div><div id="scoreVal" class="value">—</div></div>
     </div>
     <div id="detail" class="muted"></div>
@@ -44,26 +43,14 @@
       const name=localStorage.getItem('playerName')||'Player';
       const dept=localStorage.getItem('deptCode')||'';
       const deptLabel=dept? (DEPT_LABELS[dept]||dept.toUpperCase()): '미지정';
-      const mode=data.mode||'TIME_ATTACK';
-      const score=data.score;
-      const stats=(data.stats)||{};
-      const rankIndex=stats.rankIndex;
-      const total=stats.total;
-      const modeLabel = mode==='SPEED_RUN' ? 'SPEED RUN' : 'TIME ATTACK';
-      const scoreText = mode==='SPEED_RUN' ? `${score}초` : `${score}점`;
+  const primaryScore = typeof data.score === 'number' ? data.score : (data.entry && typeof data.entry.score === 'number' ? data.entry.score : null);
   const s=document.getElementById('summary');
   const d=document.getElementById('detail');
-  const rankEl=document.getElementById('rankVal');
   const scoreEl=document.getElementById('scoreVal');
-      if(score==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
-      s.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${dept? escapeHtml(deptLabel): '학과 미지정'} · ${escapeHtml(modeLabel)}`;
-      scoreEl.textContent = scoreText;
-      if(total>0 && rankIndex!=null){
-        rankEl.textContent = `${rankIndex}/${total}`;
-        d.innerHTML = `오늘 집계 기준, 총 ${total}명의 기록 중 <strong>${rankIndex}위</strong>입니다.`;
-      }else{
-        d.textContent = '랭킹 데이터가 아직 충분하지 않습니다.';
-      }
+  if(primaryScore==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
+  s.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${dept? escapeHtml(deptLabel): '학과 미지정'} · TIME ATTACK`;
+  scoreEl.textContent = `${primaryScore}점`;
+      d.textContent = '축하합니다! 다시 도전해서 기록을 갱신해 보세요.';
     })();
   </script>
 </body>

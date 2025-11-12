@@ -1,5 +1,7 @@
 import { createClient } from '@vercel/kv';
 
+const LEADERBOARD_CAP = 200;
+
 // 사범대 학과 라벨(허용 코드)
 const DEPTS = {
   ko: '국어교육과',
@@ -26,9 +28,7 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { mode, score, playerName, deptCode } = request.body || {};
-
-  const normalizedMode = mode === 'SPEED_RUN' ? 'SPEED_RUN' : 'TIME_ATTACK';
+  const { score, playerName, deptCode } = request.body || {};
 
   const sanitizedName = String(playerName || '').trim();
   if (!sanitizedName) {
@@ -39,11 +39,7 @@ export default async function handler(request, response) {
   if (!Number.isFinite(numericScore)) {
     return response.status(400).json({ error: 'Invalid score' });
   }
-  if (normalizedMode === 'TIME_ATTACK') {
-    numericScore = Math.max(0, Math.round(numericScore));
-  } else {
-    numericScore = Math.max(0, Math.round(numericScore * 100) / 100);
-  }
+  numericScore = Math.max(0, Math.round(numericScore));
 
   try {
     const url = process.env.KV_REST_API_URL;
@@ -56,45 +52,55 @@ export default async function handler(request, response) {
 
     const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
     const scopeSuffix = scope ? `:${scope}` : '';
-    const base = `scores_debug${scopeSuffix}`;
-    const key = normalizedMode === 'TIME_ATTACK' ? `${base}:time_attack` : `${base}:speed_run`;
-    const entryKey = `${base}:entry`;
-    const keyAll = `${base}:all`;
+    const base = `scores${scopeSuffix}`;
+    const sortedKey = `${base}:time_attack`;
+    const entryPrefix = `${base}:entry`;
     const safeDept = assertValidDept(deptCode);
+    const entryId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     const newEntry = {
-      id: (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
+      id: entryId,
       playerName: sanitizedName.slice(0, 40),
       deptCode: safeDept,
       deptLabel: safeDept ? DEPTS[safeDept] : '',
       score: numericScore,
-      mode: normalizedMode,
+      mode: 'TIME_ATTACK',
       date: new Date().toISOString(),
     };
 
-    const sortScore = normalizedMode === 'TIME_ATTACK' ? numericScore * -1 : numericScore;
+    const sortScore = numericScore * -1;
 
-    await kv.zadd(key, { score: sortScore, member: newEntry.id });
-    await kv.zadd(keyAll, { score: sortScore, member: newEntry.id });
+    await kv.zadd(sortedKey, { score: sortScore, member: entryId });
     try {
-      await kv.set(`${entryKey}:${newEntry.id}`, JSON.stringify(newEntry));
+      await kv.set(`${entryPrefix}:${entryId}`, JSON.stringify(newEntry));
     } catch (error) {
-      console.error('Failed to persist entry payload:', error);
+      console.error('Failed to persist leaderboard entry payload:', error);
     }
 
-    await kv.zremrangebyrank(key, 10, -1);
-
-    const totalRaw = await kv.zcard(keyAll).catch(() => 0);
-    const total = Number(totalRaw) || 0;
-    let rankIndex = null;
+    // Keep a reasonable history window to avoid unbounded growth
     try {
-      const betterOrEqual = await kv.zcount(keyAll, '-inf', sortScore);
-      rankIndex = Math.max(1, Number(betterOrEqual) || 1);
-    } catch (e) {
-      rankIndex = 1;
+      await kv.zremrangebyrank(sortedKey, LEADERBOARD_CAP, -1);
+    } catch (error) {
+      console.warn('Failed to prune leaderboard entries:', error);
     }
-    const topPercent = total > 0 ? (rankIndex / total) * 100 : 100;
 
-    return response.status(200).json({ success: true, entry: newEntry, stats: { total, rankIndex, topPercent } });
+    const [totalRaw, rankRaw] = await Promise.all([
+      kv.zcard(sortedKey).catch(() => 0),
+      kv.zrank(sortedKey, entryId).catch(() => null),
+    ]);
+
+    const total = Number(totalRaw) || 0;
+    const rankIndex = (typeof rankRaw === 'number' && rankRaw >= 0) ? rankRaw + 1 : null;
+
+    return response.status(200).json({
+      success: true,
+      entry: newEntry,
+      stats: {
+        total,
+        rankIndex,
+        topPercent: total > 0 && rankIndex ? (rankIndex / total) * 100 : null,
+      },
+    });
   } catch (error) {
     console.error('Error adding score:', error);
     const code = String(error?.message) === 'invalid_dept' ? 400 : 500;
