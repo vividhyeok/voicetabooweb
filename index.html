@@ -234,32 +234,6 @@
             display: flex;
         }
 
-        #event-banner {
-            width: 100%;
-            border-radius: 14px;
-            padding: 18px 16px;
-            background: linear-gradient(145deg, rgba(255, 77, 255, 0.1), rgba(0, 255, 255, 0.12));
-            border: 2px solid rgba(148, 248, 255, 0.5);
-            box-shadow: 0 0 18px rgba(0, 255, 255, 0.18);
-            text-align: center;
-        }
-
-        #event-banner .banner-title {
-            font-family: 'Press Start 2P', cursive;
-            font-size: clamp(0.95rem, 3.2vw, 1.1rem);
-            color: #ffe56d;
-            margin: 0 0 10px;
-            text-shadow: 0 0 10px rgba(255, 229, 109, 0.45);
-            letter-spacing: 1px;
-        }
-
-        #event-banner .banner-desc {
-            margin: 0;
-            color: #eafaff;
-            font-size: clamp(0.95rem, 3.4vw, 1.05rem);
-            line-height: 1.5;
-        }
-
         .hidden {
             display: none !important;
         }
@@ -502,24 +476,6 @@
             letter-spacing: 0.5px;
         }
 
-        #diagnostic-link {
-            margin-top: 15px;
-            text-align: center;
-            font-size: 0.85rem;
-            opacity: 0.6;
-        }
-
-        #diagnostic-link a {
-            color: #34e9ff;
-            text-decoration: none;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        #diagnostic-link a:hover {
-            opacity: 1;
-            text-decoration: underline;
-        }
     </style>
 </head>
 <body>
@@ -527,11 +483,6 @@
         <div id="menu" class="show">
             <h1 id="title">VOICE TABOO</h1>
             <h2>Web Edition</h2>
-
-            <div id="event-banner">
-                <div class="banner-title" id="banner-title">Voice Taboo 체험존</div>
-                <p class="banner-desc" id="banner-desc">닉네임만 등록하고 사범대 상위 랭커에 도전해 보세요!</p>
-            </div>
 
             <input type="text" id="player-name-input" placeholder="플레이어 이름을 입력하세요" maxlength="20">
             <div id="dept-field" class="dept-field hidden">
@@ -572,10 +523,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div id="diagnostic-link">
-                <a onclick="VTW_DIAG(); return false;" title="시스템 진단 실행 (콘솔 확인)">🔧 시스템 진단</a>
             </div>
         </div>
 
@@ -1019,8 +966,6 @@
         const nameValidationMessage = document.getElementById('name-validation-message');
         const deptFieldElement = document.getElementById('dept-field');
         const deptSelectElement = document.getElementById('dept-select');
-        const bannerTitleElement = document.getElementById('banner-title');
-        const bannerDescElement = document.getElementById('banner-desc');
         const subtitleElement = document.querySelector('#menu h2');
         
         let game;
@@ -1210,9 +1155,7 @@
 
         function configureBoothExperience() {
             if (isTeacherChallenge) {
-                if (subtitleElement) subtitleElement.textContent = '사범대생 랭킹 등록 부스';
-                if (bannerTitleElement) bannerTitleElement.textContent = '사범대 학생들을 이겨라!';
-                if (bannerDescElement) bannerDescElement.textContent = '사범대학 재학생은 닉네임과 학과를 등록해서 랭킹을 지키고, 방문 학생들은 기록을 넘어서 도장깨기에 도전해 보세요!';
+                if (subtitleElement) subtitleElement.textContent = '사범대 랭킹 모드';
                 if (playerNameInput) playerNameInput.placeholder = '닉네임을 입력하세요 (사범대생)';
                 if (deptFieldElement) deptFieldElement.classList.remove('hidden');
                 const savedDept = localStorage.getItem('deptCode');
@@ -1220,9 +1163,7 @@
                     deptSelectElement.value = savedDept;
                 }
             } else {
-                if (subtitleElement) subtitleElement.textContent = '체험자 도전 모드';
-                if (bannerTitleElement) bannerTitleElement.textContent = 'Voice Taboo 체험존';
-                if (bannerDescElement) bannerDescElement.textContent = '닉네임만 등록하고 사범대 상위 랭커에 도전해 보세요!';
+                if (subtitleElement) subtitleElement.textContent = '사대생을 이겨라!';
                 if (playerNameInput) playerNameInput.placeholder = '닉네임을 입력하세요';
                 if (deptFieldElement) deptFieldElement.classList.add('hidden');
                 if (deptSelectElement) {

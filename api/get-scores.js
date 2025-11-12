@@ -1,5 +1,27 @@
 import { createClient } from '@vercel/kv';
 
+const MAX_DISPLAY = 10;
+const FETCH_MULTIPLIER = 4;
+const FETCH_LIMIT = MAX_DISPLAY * FETCH_MULTIPLIER; // fetch extra entries to dedupe by player
+
+function normalizePlayerName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function filterUniquePlayers(entries, cap = MAX_DISPLAY) {
+  if (!Array.isArray(entries) || entries.length === 0) return [];
+  const seen = new Set();
+  const unique = [];
+  for (const entry of entries) {
+    const key = normalizePlayerName(entry.playerName);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(entry);
+    if (unique.length >= cap) break;
+  }
+  return unique;
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
     return response.status(405).json({ error: 'Method Not Allowed' });
@@ -36,9 +58,10 @@ export default async function handler(request, response) {
     const keySR = `${baseKey}:speed_run`;
     const keyAll = `${baseKey}:all`;
 
+    const endIndex = Math.max(0, FETCH_LIMIT - 1);
     const [taIds, srIds] = await Promise.all([
-      kv.zrange(keyTA, 0, 9).catch(() => []),
-      kv.zrange(keySR, 0, 9).catch(() => []),
+      kv.zrange(keyTA, 0, endIndex).catch(() => []),
+      kv.zrange(keySR, 0, endIndex).catch(() => []),
     ]);
 
     async function hydrateEntries(ids, setKey, fallbackMode) {
@@ -123,10 +146,13 @@ export default async function handler(request, response) {
       return valid;
     }
 
-    const [timeAttackScores, speedRunScores] = await Promise.all([
+    const [timeAttackScoresRaw, speedRunScoresRaw] = await Promise.all([
       hydrateEntries(taIds, keyTA, 'TIME_ATTACK'),
       hydrateEntries(srIds, keySR, 'SPEED_RUN'),
     ]);
+
+    const timeAttackScores = filterUniquePlayers(timeAttackScoresRaw, MAX_DISPLAY);
+    const speedRunScores = filterUniquePlayers(speedRunScoresRaw, MAX_DISPLAY);
 
     const body = { timeAttackScores, speedRunScores };
     if (debug) {
