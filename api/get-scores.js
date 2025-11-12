@@ -43,7 +43,26 @@ export default async function handler(request, response) {
 
     async function hydrateEntries(ids, setKey, fallbackMode) {
       if (!Array.isArray(ids) || ids.length === 0) return [];
-      const entryKeys = ids.map((id) => `${entryPrefix}:${id}`);
+
+      const seen = new Set();
+      const uniqueIds = [];
+      const duplicates = [];
+      ids.forEach((id) => {
+        if (seen.has(id)) duplicates.push(id);
+        else {
+          seen.add(id);
+          uniqueIds.push(id);
+        }
+      });
+
+      if (duplicates.length) {
+        try { await kv.zrem(setKey, ...duplicates); } catch (_) {}
+        try { await kv.zrem(keyAll, ...duplicates); } catch (_) {}
+      }
+
+      if (!uniqueIds.length) return [];
+
+      const entryKeys = uniqueIds.map((id) => `${entryPrefix}:${id}`);
       let rawEntries = [];
       try {
         rawEntries = await kv.mget(...entryKeys);
@@ -54,7 +73,7 @@ export default async function handler(request, response) {
       const valid = [];
       const stale = [];
 
-      ids.forEach((id, idx) => {
+      uniqueIds.forEach((id, idx) => {
         const raw = rawEntries?.[idx];
         if (!raw) {
           stale.push(id);

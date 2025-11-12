@@ -728,6 +728,14 @@
             }
 
             nextRound() {
+                if (this.idx >= this.items.length) {
+                    const pool = Array.isArray(tabooBank) ? [...tabooBank] : [];
+                    if (pool.length) {
+                        const refillCount = Math.min(12, pool.length);
+                        const refill = this.shuffleArray(pool).slice(0, refillCount);
+                        this.items = this.items.concat(refill);
+                    }
+                }
                 if (this.idx >= this.items.length) return null;
                 const item = this.items[this.idx++];
                 return new RoundState(item.target, item.forbidden);
@@ -841,6 +849,9 @@
                     this.startTs -= SKIP_PENALTY_SECONDS;
                 }
                 this.round = this.nextRound();
+                if (!this.round) {
+                    this.round = this.nextRound();
+                }
             }
         }
 
@@ -1047,6 +1058,11 @@
         function skipWord() {
             if (game) {
                 game.skipWord();
+                if (!game.finished) {
+                    const penaltyNote = game.timeMode === 'TIME_ATTACK' ? ' (2초 페널티)' : '';
+                    statusElement.textContent = `다음 카드로 넘어갑니다${penaltyNote}!`;
+                }
+                pendingTranscript = '';
                 updateDisplay();
             }
         }

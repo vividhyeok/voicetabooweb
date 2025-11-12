@@ -26,7 +26,6 @@
     <div id="summary" class="summary">로딩 중...</div>
     <div class="metric-row">
       <div class="chip"><div class="label">RANK</div><div id="rankVal" class="value">—</div></div>
-      <div class="chip"><div class="label">TOP PERCENT</div><div id="percentVal" class="value">—</div></div>
       <div class="chip"><div class="label">SCORE</div><div id="scoreVal" class="value">—</div></div>
     </div>
     <div id="detail" class="muted"></div>
@@ -39,7 +38,6 @@
   <script>
   const DEPT_LABELS={ ko:'국어교육과', en:'영어교육과', soc:'사회교육과', geo:'지리교육과', eth:'윤리교육과', math:'수학교육과', sci:'과학교육학부', com:'컴퓨터교육과', pe:'체육교육과' };
     function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-    function formatPercent(p){ if(!isFinite(p)) return '—'; const v=Math.max(0,Math.min(100,p)); return (v<0.1? v.toFixed(2): v<1? v.toFixed(1): Math.round(v))+'%'; }
     (function init(){
       let data={};
       try{ data=JSON.parse(localStorage.getItem('lastResult')||'{}'); }catch(_){ data={}; }
@@ -49,7 +47,6 @@
       const mode=data.mode||'TIME_ATTACK';
       const score=data.score;
       const stats=(data.stats)||{};
-      const top=stats.topPercent;
       const rankIndex=stats.rankIndex;
       const total=stats.total;
       const modeLabel = mode==='SPEED_RUN' ? 'SPEED RUN' : 'TIME ATTACK';
@@ -57,18 +54,15 @@
   const s=document.getElementById('summary');
   const d=document.getElementById('detail');
   const rankEl=document.getElementById('rankVal');
-  const pctEl=document.getElementById('percentVal');
   const scoreEl=document.getElementById('scoreVal');
       if(score==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
       s.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${dept? escapeHtml(deptLabel): '학과 미지정'} · ${escapeHtml(modeLabel)}`;
       scoreEl.textContent = scoreText;
       if(total>0 && rankIndex!=null){
-        const topText = formatPercent((rankIndex/total)*100);
         rankEl.textContent = `${rankIndex}/${total}`;
-        pctEl.textContent = `${topText}`;
-        d.innerHTML = `오늘 집계 기준입니다.`;
+        d.innerHTML = `오늘 집계 기준, 총 ${total}명의 기록 중 <strong>${rankIndex}위</strong>입니다.`;
       }else{
-        d.textContent = '상위 퍼센트 계산을 위한 데이터가 아직 충분하지 않습니다.';
+        d.textContent = '랭킹 데이터가 아직 충분하지 않습니다.';
       }
     })();
   </script>
