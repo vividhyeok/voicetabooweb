@@ -1,6 +1,7 @@
 import { createClient } from '@vercel/kv';
 
 const LEADERBOARD_CAP = 200;
+const LEADERBOARD_NAMESPACE = 'scores_v2';
 
 // 사범대 학과 라벨(허용 코드)
 const DEPTS = {
@@ -52,11 +53,13 @@ export default async function handler(request, response) {
 
     const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
     const scopeSuffix = scope ? `:${scope}` : '';
-    const base = `scores${scopeSuffix}`;
+    const base = `${LEADERBOARD_NAMESPACE}${scopeSuffix}`;
     const sortedKey = `${base}:time_attack`;
     const entryPrefix = `${base}:entry`;
     const safeDept = assertValidDept(deptCode);
-    const entryId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const normalizedKey = sanitizedName.toLowerCase();
+    const memberKey = safeDept ? `${normalizedKey}::${safeDept}` : normalizedKey;
+    const entryId = memberKey || (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
     const newEntry = {
       id: entryId,
@@ -68,20 +71,48 @@ export default async function handler(request, response) {
       date: new Date().toISOString(),
     };
 
-    const sortScore = numericScore * -1;
+    let storedEntry = newEntry;
+    let appliedScore = numericScore;
 
-    await kv.zadd(sortedKey, { score: sortScore, member: entryId });
     try {
-      await kv.set(`${entryPrefix}:${entryId}`, JSON.stringify(newEntry));
+      const existingRaw = await kv.get(`${entryPrefix}:${entryId}`);
+      if (existingRaw) {
+        let existingEntry = existingRaw;
+        if (typeof existingRaw === 'string') {
+          try {
+            existingEntry = JSON.parse(existingRaw);
+          } catch (_) {
+            existingEntry = null;
+          }
+        }
+        if (existingEntry && typeof existingEntry === 'object') {
+          const existingScore = Number(existingEntry.score) || 0;
+          if (existingScore >= numericScore) {
+            storedEntry = existingEntry;
+            appliedScore = existingScore;
+          }
+        }
+      }
     } catch (error) {
-      console.error('Failed to persist leaderboard entry payload:', error);
+      console.warn('Failed to read existing leaderboard entry:', error);
     }
 
-    // Keep a reasonable history window to avoid unbounded growth
-    try {
-      await kv.zremrangebyrank(sortedKey, LEADERBOARD_CAP, -1);
-    } catch (error) {
-      console.warn('Failed to prune leaderboard entries:', error);
+    const shouldUpdate = storedEntry === newEntry;
+
+    if (shouldUpdate) {
+      const sortScore = numericScore * -1;
+      await kv.zadd(sortedKey, { score: sortScore, member: entryId });
+      try {
+        await kv.set(`${entryPrefix}:${entryId}`, JSON.stringify(newEntry));
+      } catch (error) {
+        console.error('Failed to persist leaderboard entry payload:', error);
+      }
+
+      try {
+        await kv.zremrangebyrank(sortedKey, LEADERBOARD_CAP, -1);
+      } catch (error) {
+        console.warn('Failed to prune leaderboard entries:', error);
+      }
     }
 
     const [totalRaw, rankRaw] = await Promise.all([
@@ -94,11 +125,16 @@ export default async function handler(request, response) {
 
     return response.status(200).json({
       success: true,
-      entry: newEntry,
+      entry: storedEntry,
       stats: {
         total,
         rankIndex,
         topPercent: total > 0 && rankIndex ? (rankIndex / total) * 100 : null,
+      },
+      attempt: {
+        score: numericScore,
+        improved: shouldUpdate,
+        personalBest: appliedScore,
       },
     });
   } catch (error) {

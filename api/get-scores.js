@@ -3,6 +3,7 @@ import { createClient } from '@vercel/kv';
 const MAX_DISPLAY = 10;
 const FETCH_MULTIPLIER = 4;
 const FETCH_LIMIT = MAX_DISPLAY * FETCH_MULTIPLIER;
+const LEADERBOARD_NAMESPACE = 'scores_v2';
 
 function normalizePlayerName(name) {
   return String(name || '').trim().toLowerCase();
@@ -41,11 +42,14 @@ export default async function handler(request, response) {
   try {
     const url = process.env.KV_REST_API_URL;
     const token = process.env.KV_REST_API_TOKEN;
-    const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
-    const scopeSuffix = scope ? `:${scope}` : '';
-    const baseKey = `scores${scopeSuffix}`;
-    const sortedKey = `${baseKey}:time_attack`;
-    const entryPrefix = `${baseKey}:entry`;
+  const scope = (process.env.LEADERBOARD_SCOPE || '').trim();
+  const scopeSuffix = scope ? `:${scope}` : '';
+  const baseKeyV2 = `${LEADERBOARD_NAMESPACE}${scopeSuffix}`;
+  const sortedKeyV2 = `${baseKeyV2}:time_attack`;
+  const entryPrefixV2 = `${baseKeyV2}:entry`;
+  const legacyBaseKey = `scores${scopeSuffix}`;
+  const legacySortedKey = `${legacyBaseKey}:time_attack`;
+  const legacyEntryPrefix = `${legacyBaseKey}:entry`;
 
     if (!url || !token) {
       const payload = { scores: [], error: 'kv_unavailable' };
@@ -56,7 +60,16 @@ export default async function handler(request, response) {
     const kv = createClient({ url, token });
 
     const endIndex = Math.max(0, FETCH_LIMIT - 1);
-    const ids = await kv.zrange(sortedKey, 0, endIndex).catch(() => []);
+
+    let useLegacy = false;
+    let ids = await kv.zrange(sortedKeyV2, 0, endIndex).catch(() => []);
+    if (!Array.isArray(ids) || ids.length === 0) {
+      ids = await kv.zrange(legacySortedKey, 0, endIndex).catch(() => []);
+      useLegacy = true;
+    }
+
+    const sortedKey = useLegacy ? legacySortedKey : sortedKeyV2;
+    const entryPrefix = useLegacy ? legacyEntryPrefix : entryPrefixV2;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return response.status(200).json({ scores: [] });
@@ -90,7 +103,7 @@ export default async function handler(request, response) {
       if (!Number.isFinite(numericScore)) return;
       entries.push({
         id,
-        playerName: name,
+        playerName: parsed.playerName || name,
         deptCode: parsed.deptCode || '',
         score: numericScore,
         date: parsed.date || null,
@@ -106,6 +119,7 @@ export default async function handler(request, response) {
         provider: 'vercel-kv',
         fetchedIds: Array.isArray(ids) ? ids.length : 0,
         retained: scores.length,
+        legacy: useLegacy,
       };
     }
     return response.status(200).json(body);

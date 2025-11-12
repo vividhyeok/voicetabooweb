@@ -43,14 +43,29 @@
       const name=localStorage.getItem('playerName')||'Player';
       const dept=localStorage.getItem('deptCode')||'';
       const deptLabel=dept? (DEPT_LABELS[dept]||dept.toUpperCase()): '미지정';
-  const primaryScore = typeof data.score === 'number' ? data.score : (data.entry && typeof data.entry.score === 'number' ? data.entry.score : null);
+  const attemptInfo = data.attempt || {};
+  const attemptScore = typeof data.score === 'number'
+    ? data.score
+    : (typeof attemptInfo.score === 'number' ? attemptInfo.score : null);
+  const bestScore = typeof attemptInfo.personalBest === 'number'
+    ? attemptInfo.personalBest
+    : (data.entry && typeof data.entry.score === 'number' ? data.entry.score : attemptScore);
   const s=document.getElementById('summary');
   const d=document.getElementById('detail');
   const scoreEl=document.getElementById('scoreVal');
-  if(primaryScore==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
+  if(attemptScore==null && bestScore==null){ s.textContent='최근 플레이 결과가 없습니다.'; d.textContent='메인으로 이동해 게임을 시작해 보세요.'; return; }
   s.innerHTML = `<strong>${escapeHtml(name)}</strong> · ${dept? escapeHtml(deptLabel): '학과 미지정'} · TIME ATTACK`;
-  scoreEl.textContent = `${primaryScore}점`;
+  const displayScore = attemptScore != null ? attemptScore : bestScore;
+  scoreEl.textContent = `${displayScore ?? 0}점`;
+  if (attemptScore != null && bestScore != null) {
+    if (attemptScore >= bestScore) {
+      d.textContent = '축하합니다! 개인 최고 기록을 갱신했어요.';
+    } else {
+      d.textContent = `이번 기록은 ${attemptScore}점이에요. 개인 최고: ${bestScore}점`;
+    }
+  } else {
       d.textContent = '축하합니다! 다시 도전해서 기록을 갱신해 보세요.';
+  }
     })();
   </script>
 </body>

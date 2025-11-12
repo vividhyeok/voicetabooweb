@@ -862,8 +862,10 @@
     let pendingTranscript = '';
     let stoppedByUser = false;
     let lastFinalSnippet = '';
+    let lastDisplayedChunk = '';
     let pendingFlushTimeout = null;
     let finalizingTranscript = false;
+    let autoRestartTimer = null;
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
@@ -887,6 +889,23 @@
                 return t;
             }
 
+            function cleanSpeechChunk(text) {
+                if (!text) return '';
+                const sanitized = text.replace(/[\u200B-\u200D]/g, '').replace(/\s+/g, ' ').trim();
+                if (!sanitized) return '';
+                const tokens = sanitized.split(' ');
+                const deduped = [];
+                let prev = '';
+                for (const rawToken of tokens) {
+                    const token = rawToken.trim();
+                    if (!token) continue;
+                    if (token === prev) continue;
+                    deduped.push(token);
+                    prev = token;
+                }
+                return deduped.join(' ');
+            }
+
             recognition.onresult = async (event) => {
                 let finalPart = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -895,30 +914,38 @@
                     }
                 }
                 if (finalPart) {
-                    const cleaned = normalizeRepeats(finalPart.trim());
-                    if (!cleaned) return;
-                    let addition = cleaned;
-                    if (lastFinalSnippet && cleaned.startsWith(lastFinalSnippet)) {
-                        addition = cleaned.slice(lastFinalSnippet.length).trim();
-                    } else if (pendingTranscript && pendingTranscript.startsWith(cleaned)) {
-                        addition = '';
-                    } else if (!pendingTranscript) {
-                        addition = cleaned;
-                    } else if (cleaned.startsWith(pendingTranscript)) {
-                        addition = cleaned.slice(pendingTranscript.length).trim();
+                    const normalized = cleanSpeechChunk(normalizeRepeats(finalPart.trim()));
+                    if (!normalized) return;
+
+                    let addition = normalized;
+                    if (lastFinalSnippet && normalized.startsWith(lastFinalSnippet)) {
+                        addition = normalized.slice(lastFinalSnippet.length).trim();
+                    } else if (pendingTranscript && normalized.startsWith(pendingTranscript)) {
+                        addition = normalized.slice(pendingTranscript.length).trim();
                     }
 
+                    addition = cleanSpeechChunk(addition);
+
                     if (addition) {
-                        pendingTranscript += (pendingTranscript ? ' ' : '') + addition;
-                        addMessage('user', 'YOU: ' + addition);
+                        if (addition !== lastDisplayedChunk) {
+                            pendingTranscript += (pendingTranscript ? ' ' : '') + addition;
+                            lastDisplayedChunk = addition;
+                            addMessage('user', 'YOU: ' + addition);
+                        }
                     }
-                    lastFinalSnippet = cleaned;
+                    lastFinalSnippet = normalized;
                     if (stoppedByUser) {
                         scheduleTranscriptFinalize(140);
                     }
                 }
             };
             recognition.onerror = (event) => {
+                if (event.error === 'no-speech' && !stoppedByUser) {
+                    console.warn('Speech recognition no-speech event detected. Keeping channel open.');
+                    updateStatus('소리가 감지되지 않았어요. 계속 듣는 중...');
+                    lastFinalSnippet = '';
+                    return;
+                }
                 console.error('Speech recognition error:', event.error);
                 updateStatus('음성 인식 오류: ' + event.error);
                 isRecording = false;
@@ -930,6 +957,10 @@
                 updateRecordButton();
             };
             recognition.onend = () => {
+                if (autoRestartTimer) {
+                    clearTimeout(autoRestartTimer);
+                    autoRestartTimer = null;
+                }
                 if (stoppedByUser) {
                     isRecording = false;
                     updateRecordButton();
@@ -938,23 +969,18 @@
                 }
 
                 if (isRecording) {
-                    // 모바일 브라우저에서 무음 시 자동 종료되는 문제를 완화하기 위해 즉시 재시작
-                    try {
-                        updateStatus('듣는 중...');
-                        setTimeout(() => {
-                            try { recognition.start(); } catch (error) {
-                                console.error('Failed to auto-restart recognition:', error);
-                                isRecording = false;
-                                updateRecordButton();
-                                updateStatus('음성 인식이 중지되었습니다. 다시 시도하세요.');
-                            }
-                        }, 150);
-                    } catch (error) {
-                        console.error('Speech recognition restart error:', error);
-                        isRecording = false;
-                        updateRecordButton();
-                        updateStatus('음성 인식이 중지되었습니다. 다시 시도하세요.');
-                    }
+                    updateStatus('잠시 멈췄어요. 다시 듣는 중...');
+                    autoRestartTimer = setTimeout(() => {
+                        try {
+                            recognition.start();
+                            updateStatus('듣는 중...');
+                        } catch (error) {
+                            console.error('Failed to auto-restart recognition:', error);
+                            isRecording = false;
+                            updateRecordButton();
+                            updateStatus('음성 인식이 멈췄습니다. 버튼을 눌러 다시 시작하세요.');
+                        }
+                    }, 320);
                 } else {
                     updateStatus('녹음 대기중');
                 }
@@ -981,6 +1007,7 @@
             const transcript = pendingTranscript.trim();
             pendingTranscript = '';
             lastFinalSnippet = '';
+            lastDisplayedChunk = '';
             stoppedByUser = false;
             isRecording = false;
             updateRecordButton();
@@ -1069,6 +1096,10 @@
                 updateRecordButton();
                 updateStatus('입력을 정리하는 중...');
                 clearPendingFlushTimer();
+                if (autoRestartTimer) {
+                    clearTimeout(autoRestartTimer);
+                    autoRestartTimer = null;
+                }
                 try {
                     recognition.stop();
                 } catch (error) {
@@ -1081,6 +1112,7 @@
                     isRecording = true;
                     pendingTranscript = '';
                     lastFinalSnippet = '';
+                    lastDisplayedChunk = '';
                     stoppedByUser = false;
                     clearPendingFlushTimer();
                     finalizingTranscript = false;
@@ -1164,12 +1196,17 @@
             game = null;
             pendingTranscript = '';
             lastFinalSnippet = '';
+            lastDisplayedChunk = '';
             stoppedByUser = false;
             finalizingTranscript = false;
             clearPendingFlushTimer();
             if (recognition) {
                 isRecording = false;
                 recognition.stop();
+            }
+            if (autoRestartTimer) {
+                clearTimeout(autoRestartTimer);
+                autoRestartTimer = null;
             }
             updateGameButtons();
         }
