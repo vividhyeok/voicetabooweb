@@ -856,23 +856,34 @@
             }
         }
 
-        // Web Speech API
-    let recognition;
-    let isRecording = false;
-    let pendingTranscript = '';
-    let stoppedByUser = false;
-    let lastFinalSnippet = '';
-    let lastDisplayedChunk = '';
-    let pendingFlushTimeout = null;
-    let finalizingTranscript = false;
-    let autoRestartTimer = null;
-        function initSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                updateStatus("이 브라우저는 음성 인식을 지원하지 않습니다.");
+        // Speech input state (Web Speech API with MediaRecorder fallback)
+        let recognition;
+        let isRecording = false;
+        let pendingTranscript = '';
+        let stoppedByUser = false;
+        let lastFinalSnippet = '';
+        let lastDisplayedChunk = '';
+        let pendingFlushTimeout = null;
+        let finalizingTranscript = false;
+        let autoRestartTimer = null;
+
+        let speechMode = 'none';
+        let speechRecognitionCtor = null;
+        let mediaRecorder = null;
+        let mediaStream = null;
+        let recordedChunks = [];
+        let fallbackProcessing = false;
+        let skipNextFallbackProcess = false;
+
+        function initSpeechRecognition(SpeechRecognitionCtor) {
+            if (!SpeechRecognitionCtor) {
+                recognition = null;
                 return;
             }
-            recognition = new SpeechRecognition();
+            if (recognition) {
+                try { recognition.stop(); } catch (_) {}
+            }
+            recognition = new SpeechRecognitionCtor();
             lastFinalSnippet = '';
             recognition.lang = 'ko-KR';
             recognition.continuous = true;
@@ -968,6 +979,12 @@
                     return;
                 }
 
+                if (!game || game.finished) {
+                    isRecording = false;
+                    updateRecordButton();
+                    return;
+                }
+
                 if (isRecording) {
                     updateStatus('잠시 멈췄어요. 다시 듣는 중...');
                     autoRestartTimer = setTimeout(() => {
@@ -985,6 +1002,269 @@
                     updateStatus('녹음 대기중');
                 }
             };
+        }
+
+        function detectSpeechSupport() {
+            const ctor = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+            if (ctor) {
+                speechMode = 'webSpeech';
+                speechRecognitionCtor = ctor;
+            } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof MediaRecorder !== 'undefined') {
+                speechMode = 'media';
+                speechRecognitionCtor = null;
+            } else {
+                speechMode = 'none';
+                speechRecognitionCtor = null;
+            }
+            updateRecordButton();
+        }
+
+        function prepareSpeechEngineForGame() {
+            pendingTranscript = '';
+            lastFinalSnippet = '';
+            lastDisplayedChunk = '';
+            stoppedByUser = false;
+            finalizingTranscript = false;
+            clearPendingFlushTimer();
+            fallbackProcessing = false;
+            isRecording = false;
+            if (speechMode === 'webSpeech') {
+                initSpeechRecognition(speechRecognitionCtor);
+                updateStatus('녹음 버튼을 눌러 설명을 시작하세요.');
+            } else if (speechMode === 'media') {
+                recognition = null;
+                updateStatus('🎙️ iOS 호환 모드: 녹음 버튼을 눌러 설명을 녹음하고 다시 눌러 전송하세요.');
+            } else {
+                recognition = null;
+                updateStatus('이 브라우저는 음성 입력을 지원하지 않습니다. 텍스트 입력 기능은 현재 제공되지 않습니다.');
+            }
+            updateRecordButton();
+        }
+
+        async function startFallbackRecording() {
+            if (speechMode !== 'media') return;
+            if (fallbackProcessing) {
+                updateStatus('이전 음성을 처리 중입니다. 잠시만 기다려주세요.');
+                return;
+            }
+            if (isRecording) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                updateStatus('마이크를 사용할 수 없습니다.');
+                return;
+            }
+            try {
+                updateStatus('마이크 접근을 요청하는 중...');
+                const constraints = { audio: { echoCancellation: true, noiseSuppression: true } };
+                mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const options = {};
+                if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+                    const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/mpeg'];
+                    for (const type of preferred) {
+                        if (MediaRecorder.isTypeSupported(type)) {
+                            options.mimeType = type;
+                            break;
+                        }
+                    }
+                }
+                recordedChunks = [];
+                mediaRecorder = options.mimeType ? new MediaRecorder(mediaStream, options) : new MediaRecorder(mediaStream);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                mediaRecorder.onstop = () => {
+                    handleFallbackStop();
+                };
+                mediaRecorder.start();
+                isRecording = true;
+                skipNextFallbackProcess = false;
+                updateStatus('🎙️ 녹음 중... 설명을 마치면 버튼을 다시 눌러주세요.');
+                updateRecordButton();
+            } catch (error) {
+                console.error('Failed to start fallback recording:', error);
+                const message = error && error.name === 'NotAllowedError'
+                    ? '마이크 권한이 필요합니다. 설정에서 접근을 허용해 주세요.'
+                    : '마이크를 시작할 수 없습니다. 다른 브라우저를 시도해 주세요.';
+                updateStatus(message);
+                cleanupFallbackResources();
+                isRecording = false;
+                updateRecordButton();
+            }
+        }
+
+        function stopFallbackRecording(skipTranscription = false, options = {}) {
+            if (speechMode !== 'media') return;
+            const silent = !!(options && options.silent);
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                if (skipTranscription) {
+                    cleanupFallbackResources();
+                    fallbackProcessing = false;
+                    if (!silent) updateStatus('녹음을 취소했습니다.');
+                    updateRecordButton();
+                }
+                return;
+            }
+            isRecording = false;
+            if (skipTranscription) {
+                skipNextFallbackProcess = true;
+                fallbackProcessing = false;
+                if (!silent) updateStatus('녹음을 취소했습니다.');
+            } else {
+                fallbackProcessing = true;
+                updateStatus('음성을 처리하고 있습니다...');
+            }
+            updateRecordButton();
+            try {
+                mediaRecorder.stop();
+            } catch (error) {
+                console.error('Failed to stop fallback recorder:', error);
+                skipNextFallbackProcess = false;
+                fallbackProcessing = false;
+                cleanupFallbackResources();
+                updateRecordButton();
+            }
+        }
+
+        function cleanupFallbackResources() {
+            if (mediaStream) {
+                try {
+                    const tracks = mediaStream.getTracks();
+                    tracks.forEach(track => track.stop());
+                } catch (_) {}
+            }
+            mediaStream = null;
+            mediaRecorder = null;
+            recordedChunks = [];
+        }
+
+        async function handleFallbackStop() {
+            const shouldSkip = skipNextFallbackProcess;
+            skipNextFallbackProcess = false;
+            const chunks = recordedChunks.slice();
+            const mimeType = (mediaRecorder && mediaRecorder.mimeType) || (chunks[0] && chunks[0].type) || 'audio/webm';
+            cleanupFallbackResources();
+
+            if (shouldSkip) {
+                fallbackProcessing = false;
+                updateRecordButton();
+                return;
+            }
+
+            const blob = chunks.length ? new Blob(chunks, { type: mimeType }) : null;
+            if (!blob || blob.size === 0) {
+                fallbackProcessing = false;
+                updateStatus('음성이 인식되지 않았습니다. 다시 시도해 주세요.');
+                updateRecordButton();
+                return;
+            }
+
+            try {
+                updateStatus('음성을 인식하는 중입니다...');
+                const result = await transcribeAudioBlob(blob);
+                if (!result) {
+                    fallbackProcessing = false;
+                    updateRecordButton();
+                    return;
+                }
+                if (result.error) {
+                    if (result.error === 'openai_key_missing') {
+                        updateStatus('음성 인식 서버가 설정되지 않았습니다. 관리자에게 문의해 주세요.');
+                    } else if (result.error === 'audio_too_large') {
+                        updateStatus('녹음이 너무 깁니다. 더 짧게 설명해 주세요.');
+                    } else if (result.error === 'openai_request_failed') {
+                        updateStatus('음성 인식 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+                    } else if (result.error === 'network_error') {
+                        updateStatus('네트워크 오류로 음성 인식에 실패했습니다. 연결을 확인한 뒤 다시 시도해 주세요.');
+                    } else {
+                        updateStatus('음성 인식에 실패했습니다. 다시 시도해 주세요.');
+                    }
+                    fallbackProcessing = false;
+                    updateRecordButton();
+                    return;
+                }
+
+                const transcript = result.text;
+                if (!transcript) {
+                    updateStatus('음성이 인식되지 않았습니다. 다시 시도해 주세요.');
+                    fallbackProcessing = false;
+                    updateRecordButton();
+                    return;
+                }
+
+                pendingTranscript = '';
+                lastFinalSnippet = '';
+                lastDisplayedChunk = '';
+
+                if (game) {
+                    updateStatus('판단 중...');
+                    await game.processAudio(transcript);
+                    updateDisplay();
+                } else {
+                    updateStatus('게임이 종료되었습니다.');
+                }
+            } catch (error) {
+                console.error('Fallback transcription failed:', error);
+                updateStatus('음성 인식 중 오류가 발생했습니다. 다시 시도해 주세요.');
+            }
+
+            fallbackProcessing = false;
+            updateRecordButton();
+        }
+
+        async function transcribeAudioBlob(blob) {
+            try {
+                const base64 = await blobToBase64(blob);
+                const response = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        audio: base64,
+                        mimeType: blob.type || 'audio/webm'
+                    })
+                });
+                const data = await response.json().catch(() => ({}));
+                return {
+                    status: response.status,
+                    text: typeof data.text === 'string' ? data.text.trim() : '',
+                    error: typeof data.error === 'string' ? data.error : ''
+                };
+            } catch (error) {
+                console.error('Transcribe request failed:', error);
+                return { status: 0, text: '', error: 'network_error' };
+            }
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const result = reader.result;
+                    if (typeof result === 'string') {
+                        const base64 = result.split(',')[1] || '';
+                        resolve(base64);
+                    } else {
+                        reject(new Error('failed_to_read_blob'));
+                    }
+                };
+                reader.onerror = () => {
+                    reject(reader.error || new Error('failed_to_read_blob'));
+                };
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        function stopAllSpeechInput(skipTranscription = false) {
+            if (speechMode === 'webSpeech') {
+                if (recognition) {
+                    try { recognition.stop(); } catch (error) {
+                        console.warn('Failed to stop recognition cleanly:', error);
+                    }
+                }
+                isRecording = false;
+            } else if (speechMode === 'media') {
+                stopFallbackRecording(skipTranscription, { silent: true });
+            }
         }
 
         function clearPendingFlushTimer() {
@@ -1085,54 +1365,86 @@
             gameAreaElement.style.display = 'flex';
             
             updateDisplay();
-            initSpeechRecognition();
+            prepareSpeechEngineForGame();
         }
 
         function toggleRecording() {
-            if (!recognition) return;
-            if (isRecording) {
-                stoppedByUser = true;
-                isRecording = false;
-                updateRecordButton();
-                updateStatus('입력을 정리하는 중...');
-                clearPendingFlushTimer();
-                if (autoRestartTimer) {
-                    clearTimeout(autoRestartTimer);
-                    autoRestartTimer = null;
+            if (speechMode === 'webSpeech') {
+                if (!recognition) {
+                    initSpeechRecognition(speechRecognitionCtor);
+                    if (!recognition) {
+                        updateStatus('음성 인식이 초기화되지 않았습니다.');
+                        return;
+                    }
                 }
-                try {
-                    recognition.stop();
-                } catch (error) {
-                    console.error('Failed to stop recognition:', error);
-                    finalizePendingTranscript();
+                if (isRecording) {
+                    stoppedByUser = true;
+                    isRecording = false;
+                    updateRecordButton();
+                    updateStatus('입력을 정리하는 중...');
+                    clearPendingFlushTimer();
+                    if (autoRestartTimer) {
+                        clearTimeout(autoRestartTimer);
+                        autoRestartTimer = null;
+                    }
+                    try {
+                        recognition.stop();
+                    } catch (error) {
+                        console.error('Failed to stop recognition:', error);
+                        finalizePendingTranscript();
+                    }
+                } else {
+                    try {
+                        recognition.start();
+                        isRecording = true;
+                        pendingTranscript = '';
+                        lastFinalSnippet = '';
+                        lastDisplayedChunk = '';
+                        stoppedByUser = false;
+                        clearPendingFlushTimer();
+                        finalizingTranscript = false;
+                        updateRecordButton();
+                        updateStatus('듣는 중...');
+                    } catch (error) {
+                        console.error('Failed to start recognition:', error);
+                        updateStatus('음성 인식 시작 실패');
+                    }
+                }
+            } else if (speechMode === 'media') {
+                if (fallbackProcessing) {
+                    updateStatus('이전 음성을 처리 중입니다. 잠시만 기다려주세요.');
+                    return;
+                }
+                if (isRecording) {
+                    stopFallbackRecording(false);
+                } else {
+                    startFallbackRecording();
                 }
             } else {
-                try {
-                    recognition.start();
-                    isRecording = true;
-                    pendingTranscript = '';
-                    lastFinalSnippet = '';
-                    lastDisplayedChunk = '';
-                    stoppedByUser = false;
-                    clearPendingFlushTimer();
-                    finalizingTranscript = false;
-                    updateRecordButton();
-                    updateStatus('듣는 중...');
-                } catch (error) {
-                    console.error('Failed to start recognition:', error);
-                    updateStatus('음성 인식 시작 실패');
-                }
+                updateStatus('이 브라우저는 음성 입력을 지원하지 않습니다.');
             }
         }
 
         function updateRecordButton() {
             const btn = document.getElementById('record-btn');
+            if (!btn) return;
+            if (speechMode === 'none') {
+                btn.disabled = true;
+                btn.classList.remove('recording');
+                btn.textContent = '지원 안됨';
+                btn.title = '이 브라우저는 마이크를 지원하지 않습니다.';
+                return;
+            }
+            btn.disabled = fallbackProcessing && speechMode === 'media';
+            btn.title = speechMode === 'media'
+                ? '녹음 후 전송됩니다. 처리 중에는 버튼이 비활성화됩니다.'
+                : '음성 인식을 시작/중지합니다.';
             if (isRecording) {
                 btn.classList.add('recording');
                 btn.textContent = '⏹️';
             } else {
                 btn.classList.remove('recording');
-                btn.textContent = '🎤';
+                btn.textContent = speechMode === 'media' ? '🎙️' : '🎤';
             }
         }
 
@@ -1162,7 +1474,9 @@
                 forbiddenWordsElement.textContent = '';
                 saveScore(game.score);
                 statusElement.textContent = `게임 종료! 최종 점수: ${game.score}단어`;
-                if (recognition) recognition.stop();
+                stopAllSpeechInput(true);
+                fallbackProcessing = false;
+                updateRecordButton();
                 return;
             }
 
@@ -1200,15 +1514,14 @@
             stoppedByUser = false;
             finalizingTranscript = false;
             clearPendingFlushTimer();
-            if (recognition) {
-                isRecording = false;
-                recognition.stop();
-            }
+            stopAllSpeechInput(true);
+            fallbackProcessing = false;
             if (autoRestartTimer) {
                 clearTimeout(autoRestartTimer);
                 autoRestartTimer = null;
             }
             updateGameButtons();
+            updateRecordButton();
         }
 
         function skipWord() {
@@ -1233,6 +1546,7 @@
 
         // Initialize
         window.onload = () => {
+            detectSpeechSupport();
             configureBoothExperience();
             updateLeaderboard();
             updateGameButtons();
